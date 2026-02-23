@@ -171,6 +171,98 @@ class F1IntelligenceAPITester:
             
         return True
 
+    def validate_constructor_profile(self, data: Dict) -> bool:
+        """Validate constructor profile structure"""
+        required_fields = ['constructor', 'stats', 'timeline', 'top_drivers']
+        for field in required_fields:
+            if field not in data:
+                return f"Missing field in constructor profile: {field}"
+        
+        if not isinstance(data['constructor'], dict):
+            return "constructor should be a dict"
+        if not isinstance(data['stats'], dict):
+            return "stats should be a dict"
+        if not isinstance(data['top_drivers'], list):
+            return "top_drivers should be a list"
+            
+        # Check constructor name
+        constructor = data['constructor']
+        if 'name' not in constructor:
+            return "Missing 'name' in constructor"
+        
+        # Check stats structure
+        stats = data['stats']
+        required_stat_fields = ['wins', 'podiums', 'poles', 'total_points', 'races', 'championships']
+        for field in required_stat_fields:
+            if field not in stats:
+                return f"Missing stat field: {field}"
+                
+        return True
+
+    def validate_season_profile(self, data: Dict) -> bool:
+        """Validate season profile structure"""
+        required_fields = ['year', 'driver_standings', 'constructor_standings', 'race_winners']
+        for field in required_fields:
+            if field not in data:
+                return f"Missing field in season profile: {field}"
+        
+        # Check year
+        if not isinstance(data['year'], int):
+            return "year should be an integer"
+        
+        # Check driver standings
+        driver_standings = data['driver_standings']
+        if not isinstance(driver_standings, list):
+            return "driver_standings should be a list"
+        if len(driver_standings) == 0:
+            return "driver_standings should not be empty"
+            
+        # Check first driver standing structure
+        first_driver = driver_standings[0]
+        required_driver_fields = ['position', 'points', 'driverId', 'forename', 'surname']
+        for field in required_driver_fields:
+            if field not in first_driver:
+                return f"Missing driver standing field: {field}"
+        
+        # Check constructor standings
+        constructor_standings = data['constructor_standings']
+        if not isinstance(constructor_standings, list):
+            return "constructor_standings should be a list"
+            
+        return True
+
+    def validate_rivalry_circuit_breakdown(self, data: Dict) -> bool:
+        """Validate rivalry circuit breakdown structure"""
+        required_fields = ['driver1', 'driver2', 'circuit_breakdown', 'common_races']
+        for field in required_fields:
+            if field not in data:
+                return f"Missing field in rivalry: {field}"
+        
+        # Check basic H2H structure first
+        h2h_result = self.validate_head_to_head(data)
+        if h2h_result is not True:
+            return h2h_result
+        
+        # Check circuit breakdown
+        circuit_breakdown = data['circuit_breakdown']
+        if not isinstance(circuit_breakdown, list):
+            return "circuit_breakdown should be a list"
+        if len(circuit_breakdown) == 0:
+            return "circuit_breakdown should not be empty"
+            
+        # Check first circuit structure
+        first_circuit = circuit_breakdown[0]
+        required_circuit_fields = ['circuitId', 'name', 'country', 'races', 'd1_quali_wins', 'd2_quali_wins', 'd1_race_wins', 'd2_race_wins', 'd1_wins', 'd2_wins']
+        for field in required_circuit_fields:
+            if field not in first_circuit:
+                return f"Missing circuit breakdown field: {field}"
+        
+        # Check that races > 0
+        if first_circuit['races'] <= 0:
+            return "Circuit races should be positive"
+            
+        return True
+
     def run_all_tests(self):
         """Run comprehensive API tests"""
         print("🚀 Starting F1 Intelligence API Tests")
