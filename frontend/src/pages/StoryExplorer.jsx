@@ -160,11 +160,12 @@ const StoryExplorer = () => {
     if (entityType === 'driver') return `${entity.forename} ${entity.surname}`;
     if (entityType === 'constructor') return entity.name;
     if (entityType === 'circuit') return entity.name;
-    if (entityType === 'season') return entity.year.toString();
+    if (entityType === 'season') return entity.year?.toString() || '';
     return '';
   };
 
   const getEntityId = (entity) => {
+    if (!entity) return null;
     if (entityType === 'driver') return entity.driverId;
     if (entityType === 'constructor') return entity.constructorId;
     if (entityType === 'circuit') return entity.circuitId;
