@@ -33,6 +33,7 @@ export const getHeadToHead = (driver1Id, driver2Id, params) =>
 
 // GOAT Engine endpoints
 export const getGoatLeaderboard = (params) => api.get('/goat/leaderboard', { params }).then(r => r.data);
+export const getEras = () => api.get('/eras').then(r => r.data);
 
 // Story Explorer endpoints
 export const getDriverProfile = (driverId) => api.get(`/driver/${driverId}/profile`).then(r => r.data);
