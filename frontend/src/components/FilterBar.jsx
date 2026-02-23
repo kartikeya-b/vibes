@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getSeasons, getDrivers, getConstructors } from '../lib/api';
 import { Button } from '../components/ui/button';
@@ -11,46 +11,49 @@ import { SlidersHorizontal, X, Search, RotateCcw } from 'lucide-react';
 export const useFilters = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   
-  const getParam = (key, defaultValue) => {
-    const value = searchParams.get(key);
-    if (value === null) return defaultValue;
-    if (defaultValue === null) return value;
-    if (typeof defaultValue === 'number') return parseInt(value) || defaultValue;
-    if (typeof defaultValue === 'boolean') return value === 'true';
-    return value;
-  };
-  
-  const filters = {
-    yearFrom: getParam('yearFrom', null),
-    yearTo: getParam('yearTo', null),
-    season: getParam('season', null),
-    driverId: getParam('driverId', null),
-    constructorId: getParam('constructorId', null),
-    circuitId: getParam('circuitId', null),
-    raceId: getParam('raceId', null),
-  };
+  // Memoize the filters object to prevent unnecessary re-renders
+  const filters = useMemo(() => {
+    const getParam = (key) => {
+      const value = searchParams.get(key);
+      return value || null;
+    };
+    
+    return {
+      yearFrom: getParam('yearFrom'),
+      yearTo: getParam('yearTo'),
+      season: getParam('season'),
+      driverId: getParam('driverId'),
+      constructorId: getParam('constructorId'),
+      circuitId: getParam('circuitId'),
+      raceId: getParam('raceId'),
+    };
+  }, [searchParams]);
   
   const setFilter = useCallback((key, value) => {
-    const newParams = new URLSearchParams(searchParams);
-    if (value === null || value === undefined || value === '' || value === 'all') {
-      newParams.delete(key);
-    } else {
-      newParams.set(key, value.toString());
-    }
-    setSearchParams(newParams, { replace: true });
-  }, [searchParams, setSearchParams]);
-  
-  const setFilters = useCallback((newFilters) => {
-    const newParams = new URLSearchParams(searchParams);
-    Object.entries(newFilters).forEach(([key, value]) => {
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
       if (value === null || value === undefined || value === '' || value === 'all') {
         newParams.delete(key);
       } else {
         newParams.set(key, value.toString());
       }
-    });
-    setSearchParams(newParams, { replace: true });
-  }, [searchParams, setSearchParams]);
+      return newParams;
+    }, { replace: true });
+  }, [setSearchParams]);
+  
+  const setFilters = useCallback((newFilters) => {
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
+      Object.entries(newFilters).forEach(([key, value]) => {
+        if (value === null || value === undefined || value === '' || value === 'all') {
+          newParams.delete(key);
+        } else {
+          newParams.set(key, value.toString());
+        }
+      });
+      return newParams;
+    }, { replace: true });
+  }, [setSearchParams]);
   
   const clearFilters = useCallback(() => {
     setSearchParams({}, { replace: true });
@@ -86,7 +89,7 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
     getConstructors(params).then(setConstructors).catch(console.error);
   }, [constructorSearch, filters.season]);
   
-  const hasActiveFilters = Object.values(filters).some(v => v !== null);
+  const hasActiveFilters = filters.season || filters.driverId || filters.constructorId || filters.yearFrom || filters.yearTo;
   
   const FilterContent = () => (
     <div className="space-y-6">
@@ -95,7 +98,7 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
           <Label className="data-label">Year Range</Label>
           <div className="flex items-center gap-3">
             <Select 
-              value={filters.yearFrom?.toString() || "all"} 
+              value={filters.yearFrom || "all"} 
               onValueChange={(v) => setFilter('yearFrom', v === 'all' ? null : v)}
             >
               <SelectTrigger className="bg-surface-200 border-white/10" data-testid="filter-year-from">
@@ -110,7 +113,7 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
             </Select>
             <span className="text-slate-500">to</span>
             <Select 
-              value={filters.yearTo?.toString() || "all"} 
+              value={filters.yearTo || "all"} 
               onValueChange={(v) => setFilter('yearTo', v === 'all' ? null : v)}
             >
               <SelectTrigger className="bg-surface-200 border-white/10" data-testid="filter-year-to">
@@ -130,7 +133,7 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
       <div className="space-y-3">
         <Label className="data-label">Season</Label>
         <Select 
-          value={filters.season?.toString() || "all"} 
+          value={filters.season || "all"} 
           onValueChange={(v) => setFilter('season', v === 'all' ? null : v)}
         >
           <SelectTrigger className="bg-surface-200 border-white/10" data-testid="filter-season">
@@ -158,7 +161,7 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
             />
           </div>
           <Select 
-            value={filters.driverId?.toString() || "all"} 
+            value={filters.driverId || "all"} 
             onValueChange={(v) => setFilter('driverId', v === 'all' ? null : v)}
           >
             <SelectTrigger className="bg-surface-200 border-white/10" data-testid="filter-driver">
@@ -190,7 +193,7 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
             />
           </div>
           <Select 
-            value={filters.constructorId?.toString() || "all"} 
+            value={filters.constructorId || "all"} 
             onValueChange={(v) => setFilter('constructorId', v === 'all' ? null : v)}
           >
             <SelectTrigger className="bg-surface-200 border-white/10" data-testid="filter-constructor">
@@ -232,7 +235,7 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
         </div>
         
         <Select 
-          value={filters.season?.toString() || "all"} 
+          value={filters.season || "all"} 
           onValueChange={(v) => setFilter('season', v === 'all' ? null : v)}
         >
           <SelectTrigger className="w-32 bg-surface-200 border-white/10 h-9" data-testid="desktop-filter-season">
@@ -248,7 +251,7 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
         
         {showDriverFilter && (
           <Select 
-            value={filters.driverId?.toString() || "all"} 
+            value={filters.driverId || "all"} 
             onValueChange={(v) => setFilter('driverId', v === 'all' ? null : v)}
           >
             <SelectTrigger className="w-48 bg-surface-200 border-white/10 h-9" data-testid="desktop-filter-driver">
@@ -267,7 +270,7 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
         
         {showConstructorFilter && (
           <Select 
-            value={filters.constructorId?.toString() || "all"} 
+            value={filters.constructorId || "all"} 
             onValueChange={(v) => setFilter('constructorId', v === 'all' ? null : v)}
           >
             <SelectTrigger className="w-48 bg-surface-200 border-white/10 h-9" data-testid="desktop-filter-constructor">
