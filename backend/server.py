@@ -1032,8 +1032,8 @@ async def get_goat_leaderboard(
         limit=1000
     )
     
-    # Filter by min races
-    driver_stats = [d for d in driver_stats if d.races >= min_races]
+    # Filter by min races - driver_stats returns list of DriverStats objects
+    driver_stats = [d for d in driver_stats if d["races"] >= min_races]
     
     # Calculate scores
     scored_drivers = []
