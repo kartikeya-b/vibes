@@ -65,13 +65,24 @@ F1 Intelligence is a premium-feeling, dark-themed web app that lets users explor
 - [ ] Custom GOAT preset saving
 - [ ] Era-adjusted statistics
 
+## Bug Fixes Completed (Feb 23, 2026)
+### User-Reported Issues - ALL FIXED ✅
+1. ✅ **Filter search bars** - Added SearchableSelect component with Command for searching 860+ drivers and 210+ constructors
+2. ✅ **Chart reflects filters** - Charts and KPIs update when GO button is clicked (filters applied via URL params)
+3. ✅ **GO button for filters** - Added "GO" button to batch filter selections before processing
+4. ✅ **Generate Facts for all tabs** - Extended backend to support constructor and circuit fact generation
+5. ✅ **Seasons tab runtime error** - Fixed null safety in getEntityId/getEntityName functions
+6. ✅ **Rivalry search UX** - Replaced inline search with Popover-based searchable dropdown (no interference)
+
 ## Next Tasks
-1. Await user's list of bugs and improvements (user confirmed they would share this)
-2. Add social share preview for fact cards
-3. Mobile-optimized filter drawer
+1. Add social share preview for fact cards
+2. Mobile-optimized filter drawer
+3. Export chart as image functionality
 4. Consider Emergent Google Auth for user accounts
 
 ## Session Log - Feb 23, 2026
 - Verified application is fully functional after handoff (no crash - previous issue resolved)
 - Tested Analytics Studio, Story Explorer, and Rivalry Explorer - all working
 - Confirmed circuit-by-circuit breakdown returns 32 circuits for Hamilton vs Verstappen comparison
+- Fixed all 6 user-reported bugs/improvements
+- Testing agent verified 100% pass rate (17/17 backend tests, 9/9 frontend tests)
