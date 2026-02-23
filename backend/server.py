@@ -463,6 +463,8 @@ async def get_overview_stats(
 @api_router.get("/stats/drivers", response_model=List[DriverStats])
 async def get_driver_stats(
     driver_ids: Optional[str] = None,  # comma-separated
+    driver_id: Optional[int] = None,  # single driver filter
+    constructor_id: Optional[int] = None,  # filter by constructor
     year_from: Optional[int] = None,
     year_to: Optional[int] = None,
     limit: int = Query(default=50, le=200)
@@ -488,6 +490,10 @@ async def get_driver_stats(
     if driver_ids:
         ids = [int(x) for x in driver_ids.split(",")]
         result_match["driverId"] = {"$in": ids}
+    if driver_id:
+        result_match["driverId"] = driver_id
+    if constructor_id:
+        result_match["constructorId"] = constructor_id
     
     pipeline = []
     if result_match:
