@@ -37,6 +37,8 @@ export const getGoatLeaderboard = (params) => api.get('/goat/leaderboard', { par
 // Story Explorer endpoints
 export const getDriverProfile = (driverId) => api.get(`/driver/${driverId}/profile`).then(r => r.data);
 export const getCircuitProfile = (circuitId) => api.get(`/circuit/${circuitId}/profile`).then(r => r.data);
+export const getConstructorProfile = (constructorId) => api.get(`/constructor/${constructorId}/profile`).then(r => r.data);
+export const getSeasonProfile = (year) => api.get(`/season/${year}/profile`).then(r => r.data);
 export const generateFacts = (params) => api.get('/facts/generate', { params }).then(r => r.data);
 
 // Import data
