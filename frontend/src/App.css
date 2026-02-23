@@ -1,34 +1,103 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* F1 Intelligence Styles */
+
+/* Remove default centering */
+.App {
+  text-align: left;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+/* Custom animations */
+@keyframes slide-in-from-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-.App-link {
-    color: #61dafb;
+/* Chart styling overrides */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #252932 !important;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.recharts-tooltip-wrapper {
+  outline: none !important;
+}
+
+/* Hide scrollbar but keep functionality */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Position badges animation */
+.position-badge {
+  transition: transform 0.2s ease-out;
+}
+
+.position-badge:hover {
+  transform: scale(1.1);
+}
+
+/* Racing stripe accent */
+.racing-stripe {
+  position: relative;
+}
+
+.racing-stripe::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #FF1E1E 0%, #FF1E1E 33%, #FFFFFF 33%, #FFFFFF 66%, #00F0FF 66%, #00F0FF 100%);
+}
+
+/* Telemetry data effect */
+.telemetry-text {
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: -0.02em;
+}
+
+/* Glass card effect */
+.glass-card {
+  background: rgba(18, 20, 24, 0.8);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Interactive highlight */
+.interactive-row:hover {
+  background: rgba(0, 240, 255, 0.05);
+}
+
+/* Loading skeleton pulse */
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.skeleton-pulse {
+  animation: skeleton-pulse 2s ease-in-out infinite;
 }
