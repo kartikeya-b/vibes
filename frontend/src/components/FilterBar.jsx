@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getSeasons, getDrivers, getConstructors, getCircuits, getRaces } from '../lib/api';
+import { getSeasons, getDrivers, getConstructors } from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
-import { Slider } from '../components/ui/slider';
-import { Switch } from '../components/ui/switch';
 import { Label } from '../components/ui/label';
 import { SlidersHorizontal, X, Search, RotateCcw } from 'lucide-react';
 
@@ -34,7 +32,7 @@ export const useFilters = () => {
   
   const setFilter = useCallback((key, value) => {
     const newParams = new URLSearchParams(searchParams);
-    if (value === null || value === undefined || value === '') {
+    if (value === null || value === undefined || value === '' || value === 'all') {
       newParams.delete(key);
     } else {
       newParams.set(key, value.toString());
@@ -45,7 +43,7 @@ export const useFilters = () => {
   const setFilters = useCallback((newFilters) => {
     const newParams = new URLSearchParams(searchParams);
     Object.entries(newFilters).forEach(([key, value]) => {
-      if (value === null || value === undefined || value === '') {
+      if (value === null || value === undefined || value === '' || value === 'all') {
         newParams.delete(key);
       } else {
         newParams.set(key, value.toString());
@@ -97,14 +95,14 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
           <Label className="data-label">Year Range</Label>
           <div className="flex items-center gap-3">
             <Select 
-              value={filters.yearFrom?.toString() || ""} 
-              onValueChange={(v) => setFilter('yearFrom', v || null)}
+              value={filters.yearFrom?.toString() || "all"} 
+              onValueChange={(v) => setFilter('yearFrom', v === 'all' ? null : v)}
             >
               <SelectTrigger className="bg-surface-200 border-white/10" data-testid="filter-year-from">
                 <SelectValue placeholder="From" />
               </SelectTrigger>
               <SelectContent className="bg-surface-200 border-white/10">
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 {seasons.map(s => (
                   <SelectItem key={s.year} value={s.year.toString()}>{s.year}</SelectItem>
                 ))}
@@ -112,14 +110,14 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
             </Select>
             <span className="text-slate-500">to</span>
             <Select 
-              value={filters.yearTo?.toString() || ""} 
-              onValueChange={(v) => setFilter('yearTo', v || null)}
+              value={filters.yearTo?.toString() || "all"} 
+              onValueChange={(v) => setFilter('yearTo', v === 'all' ? null : v)}
             >
               <SelectTrigger className="bg-surface-200 border-white/10" data-testid="filter-year-to">
                 <SelectValue placeholder="To" />
               </SelectTrigger>
               <SelectContent className="bg-surface-200 border-white/10">
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 {seasons.map(s => (
                   <SelectItem key={s.year} value={s.year.toString()}>{s.year}</SelectItem>
                 ))}
@@ -132,14 +130,14 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
       <div className="space-y-3">
         <Label className="data-label">Season</Label>
         <Select 
-          value={filters.season?.toString() || ""} 
-          onValueChange={(v) => setFilter('season', v || null)}
+          value={filters.season?.toString() || "all"} 
+          onValueChange={(v) => setFilter('season', v === 'all' ? null : v)}
         >
           <SelectTrigger className="bg-surface-200 border-white/10" data-testid="filter-season">
             <SelectValue placeholder="All Seasons" />
           </SelectTrigger>
           <SelectContent className="bg-surface-200 border-white/10 max-h-60">
-            <SelectItem value="">All Seasons</SelectItem>
+            <SelectItem value="all">All Seasons</SelectItem>
             {seasons.map(s => (
               <SelectItem key={s.year} value={s.year.toString()}>{s.year}</SelectItem>
             ))}
@@ -160,14 +158,14 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
             />
           </div>
           <Select 
-            value={filters.driverId?.toString() || ""} 
-            onValueChange={(v) => setFilter('driverId', v || null)}
+            value={filters.driverId?.toString() || "all"} 
+            onValueChange={(v) => setFilter('driverId', v === 'all' ? null : v)}
           >
             <SelectTrigger className="bg-surface-200 border-white/10" data-testid="filter-driver">
               <SelectValue placeholder="Select Driver" />
             </SelectTrigger>
             <SelectContent className="bg-surface-200 border-white/10 max-h-60">
-              <SelectItem value="">All Drivers</SelectItem>
+              <SelectItem value="all">All Drivers</SelectItem>
               {drivers.map(d => (
                 <SelectItem key={d.driverId} value={d.driverId.toString()}>
                   {d.code && <span className="font-mono text-racing-cyan mr-2">{d.code}</span>}
@@ -192,14 +190,14 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
             />
           </div>
           <Select 
-            value={filters.constructorId?.toString() || ""} 
-            onValueChange={(v) => setFilter('constructorId', v || null)}
+            value={filters.constructorId?.toString() || "all"} 
+            onValueChange={(v) => setFilter('constructorId', v === 'all' ? null : v)}
           >
             <SelectTrigger className="bg-surface-200 border-white/10" data-testid="filter-constructor">
               <SelectValue placeholder="Select Constructor" />
             </SelectTrigger>
             <SelectContent className="bg-surface-200 border-white/10 max-h-60">
-              <SelectItem value="">All Constructors</SelectItem>
+              <SelectItem value="all">All Constructors</SelectItem>
               {constructors.map(c => (
                 <SelectItem key={c.constructorId} value={c.constructorId.toString()}>
                   {c.name}
@@ -234,14 +232,14 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
         </div>
         
         <Select 
-          value={filters.season?.toString() || ""} 
-          onValueChange={(v) => setFilter('season', v || null)}
+          value={filters.season?.toString() || "all"} 
+          onValueChange={(v) => setFilter('season', v === 'all' ? null : v)}
         >
           <SelectTrigger className="w-32 bg-surface-200 border-white/10 h-9" data-testid="desktop-filter-season">
             <SelectValue placeholder="Season" />
           </SelectTrigger>
           <SelectContent className="bg-surface-200 border-white/10">
-            <SelectItem value="">All Years</SelectItem>
+            <SelectItem value="all">All Years</SelectItem>
             {seasons.map(s => (
               <SelectItem key={s.year} value={s.year.toString()}>{s.year}</SelectItem>
             ))}
@@ -250,14 +248,14 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
         
         {showDriverFilter && (
           <Select 
-            value={filters.driverId?.toString() || ""} 
-            onValueChange={(v) => setFilter('driverId', v || null)}
+            value={filters.driverId?.toString() || "all"} 
+            onValueChange={(v) => setFilter('driverId', v === 'all' ? null : v)}
           >
             <SelectTrigger className="w-48 bg-surface-200 border-white/10 h-9" data-testid="desktop-filter-driver">
               <SelectValue placeholder="Driver" />
             </SelectTrigger>
             <SelectContent className="bg-surface-200 border-white/10 max-h-60">
-              <SelectItem value="">All Drivers</SelectItem>
+              <SelectItem value="all">All Drivers</SelectItem>
               {drivers.map(d => (
                 <SelectItem key={d.driverId} value={d.driverId.toString()}>
                   {d.forename} {d.surname}
@@ -269,14 +267,14 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
         
         {showConstructorFilter && (
           <Select 
-            value={filters.constructorId?.toString() || ""} 
-            onValueChange={(v) => setFilter('constructorId', v || null)}
+            value={filters.constructorId?.toString() || "all"} 
+            onValueChange={(v) => setFilter('constructorId', v === 'all' ? null : v)}
           >
             <SelectTrigger className="w-48 bg-surface-200 border-white/10 h-9" data-testid="desktop-filter-constructor">
               <SelectValue placeholder="Constructor" />
             </SelectTrigger>
             <SelectContent className="bg-surface-200 border-white/10 max-h-60">
-              <SelectItem value="">All Constructors</SelectItem>
+              <SelectItem value="all">All Constructors</SelectItem>
               {constructors.map(c => (
                 <SelectItem key={c.constructorId} value={c.constructorId.toString()}>
                   {c.name}
