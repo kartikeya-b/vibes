@@ -260,6 +260,28 @@ class F1IntelligenceAPITester:
             params={"entity_type": "driver", "entity_id": 1, "count": 5}
         )
 
+        # NEW FEATURES TESTING
+        print("\n🆕 TESTING NEW FEATURES")
+        print("-" * 40)
+        
+        # Test Constructor Profile (Mercedes - ID 131)
+        self.run_test(
+            "Constructor Profile - Mercedes", "GET", "/api/constructor/131/profile",
+            validate_response=self.validate_constructor_profile
+        )
+        
+        # Test Season Profile (2023 season)
+        self.run_test(
+            "Season Profile - 2023", "GET", "/api/season/2023/profile", 
+            validate_response=self.validate_season_profile
+        )
+        
+        # Test Rivalry Circuit Breakdown (Hamilton vs Verstappen)
+        self.run_test(
+            "Rivalry Circuit Breakdown", "GET", "/api/rivalry/1/830",
+            validate_response=self.validate_rivalry_circuit_breakdown
+        )
+
         # Print final results
         print("\n" + "=" * 60)
         print("🏁 TEST RESULTS SUMMARY")
