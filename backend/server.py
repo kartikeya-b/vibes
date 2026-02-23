@@ -1767,6 +1767,149 @@ async def generate_facts(
                 "type": "career_stat"
             })
     
+    elif entity_type == "constructor":
+        constructor = await db.constructors.find_one({"constructorId": entity_id}, {"_id": 0})
+        if not constructor:
+            raise HTTPException(status_code=404, detail="Constructor not found")
+        
+        name = constructor['name']
+        
+        # Fact: Total wins
+        total_wins = await db.results.count_documents({"constructorId": entity_id, "position": 1})
+        if total_wins > 0:
+            facts.append({
+                "text": f"{name} has won {total_wins} Grand Prix races in Formula 1 history",
+                "type": "career_stat"
+            })
+        
+        # Fact: First win
+        first_win = await db.results.find_one(
+            {"constructorId": entity_id, "position": 1},
+            {"_id": 0, "raceId": 1, "driverId": 1}
+        )
+        if first_win:
+            race = await db.races.find_one({"raceId": first_win["raceId"]}, {"_id": 0, "name": 1, "year": 1})
+            driver = await db.drivers.find_one({"driverId": first_win["driverId"]}, {"_id": 0, "forename": 1, "surname": 1})
+            if race and driver:
+                facts.append({
+                    "text": f"{name}'s first F1 victory came at the {race['year']} {race['name']} with {driver['forename']} {driver['surname']}",
+                    "type": "career_milestone"
+                })
+        
+        # Fact: Most successful driver
+        top_driver = await db.results.aggregate([
+            {"$match": {"constructorId": entity_id, "position": 1}},
+            {"$group": {"_id": "$driverId", "wins": {"$sum": 1}}},
+            {"$sort": {"wins": -1}},
+            {"$limit": 1}
+        ]).to_list(1)
+        if top_driver:
+            driver = await db.drivers.find_one({"driverId": top_driver[0]["_id"]}, {"_id": 0, "forename": 1, "surname": 1})
+            if driver:
+                facts.append({
+                    "text": f"{driver['forename']} {driver['surname']} is {name}'s most successful driver with {top_driver[0]['wins']} victories",
+                    "type": "driver_record"
+                })
+        
+        # Fact: Best season
+        best_season = await db.results.aggregate([
+            {"$match": {"constructorId": entity_id, "position": 1}},
+            {"$lookup": {"from": "races", "localField": "raceId", "foreignField": "raceId", "as": "race"}},
+            {"$unwind": "$race"},
+            {"$group": {"_id": "$race.year", "wins": {"$sum": 1}}},
+            {"$sort": {"wins": -1}},
+            {"$limit": 1}
+        ]).to_list(1)
+        if best_season and best_season[0]["wins"] > 0:
+            facts.append({
+                "text": f"{name}'s most dominant season was {best_season[0]['_id']} with {best_season[0]['wins']} race wins",
+                "type": "season_record"
+            })
+        
+        # Fact: Total podiums
+        total_podiums = await db.results.count_documents({"constructorId": entity_id, "position": {"$lte": 3}})
+        if total_podiums > 0:
+            facts.append({
+                "text": f"{name} has achieved {total_podiums} podium finishes in F1",
+                "type": "career_stat"
+            })
+        
+        # Fact: Active years
+        years = await db.results.aggregate([
+            {"$match": {"constructorId": entity_id}},
+            {"$lookup": {"from": "races", "localField": "raceId", "foreignField": "raceId", "as": "race"}},
+            {"$unwind": "$race"},
+            {"$group": {"_id": None, "first": {"$min": "$race.year"}, "last": {"$max": "$race.year"}}}
+        ]).to_list(1)
+        if years:
+            facts.append({
+                "text": f"{name} competed in F1 from {years[0]['first']} to {years[0]['last']}",
+                "type": "history"
+            })
+    
+    elif entity_type == "circuit":
+        circuit = await db.circuits.find_one({"circuitId": entity_id}, {"_id": 0})
+        if not circuit:
+            raise HTTPException(status_code=404, detail="Circuit not found")
+        
+        name = circuit['name']
+        
+        # Fact: Total races held
+        total_races = await db.races.count_documents({"circuitId": entity_id})
+        if total_races > 0:
+            facts.append({
+                "text": f"{name} has hosted {total_races} Formula 1 Grand Prix events",
+                "type": "history"
+            })
+        
+        # Fact: First race
+        first_race = await db.races.find_one({"circuitId": entity_id}, {"_id": 0, "name": 1, "year": 1}, sort=[("year", 1)])
+        if first_race:
+            facts.append({
+                "text": f"The first F1 race at {name} was the {first_race['year']} {first_race['name']}",
+                "type": "history"
+            })
+        
+        # Fact: Most wins at circuit
+        race_ids = await db.races.distinct("raceId", {"circuitId": entity_id})
+        if race_ids:
+            top_winner = await db.results.aggregate([
+                {"$match": {"raceId": {"$in": race_ids}, "position": 1}},
+                {"$group": {"_id": "$driverId", "wins": {"$sum": 1}}},
+                {"$sort": {"wins": -1}},
+                {"$limit": 1}
+            ]).to_list(1)
+            if top_winner:
+                driver = await db.drivers.find_one({"driverId": top_winner[0]["_id"]}, {"_id": 0, "forename": 1, "surname": 1})
+                if driver:
+                    facts.append({
+                        "text": f"{driver['forename']} {driver['surname']} holds the record for most wins at {name} with {top_winner[0]['wins']} victories",
+                        "type": "driver_record"
+                    })
+        
+        # Fact: Most wins by constructor
+        if race_ids:
+            top_constructor = await db.results.aggregate([
+                {"$match": {"raceId": {"$in": race_ids}, "position": 1}},
+                {"$group": {"_id": "$constructorId", "wins": {"$sum": 1}}},
+                {"$sort": {"wins": -1}},
+                {"$limit": 1}
+            ]).to_list(1)
+            if top_constructor:
+                constructor = await db.constructors.find_one({"constructorId": top_constructor[0]["_id"]}, {"_id": 0, "name": 1})
+                if constructor:
+                    facts.append({
+                        "text": f"{constructor['name']} is the most successful constructor at {name} with {top_constructor[0]['wins']} wins",
+                        "type": "constructor_record"
+                    })
+        
+        # Fact: Circuit location
+        if circuit.get('location') and circuit.get('country'):
+            facts.append({
+                "text": f"{name} is located in {circuit['location']}, {circuit['country']}",
+                "type": "info"
+            })
+    
     return facts[:count]
 
 # Include router and configure CORS
