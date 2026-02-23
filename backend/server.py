@@ -1271,6 +1271,7 @@ async def get_circuit_profile(circuit_id: int):
                 }},
                 {"$unwind": "$driver"},
                 {"$project": {
+                    "_id": 0,
                     "driverRef": "$driver.driverRef",
                     "forename": "$driver.forename",
                     "surname": "$driver.surname"
