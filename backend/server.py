@@ -144,6 +144,66 @@ class HeadToHead(BaseModel):
     podiums_h2h: Dict[str, int]
     common_races: int
 
+# ============ ERA DEFINITIONS ============
+F1_ERAS = {
+    "pioneer": {
+        "name": "Pioneer Era",
+        "years": (1950, 1957),
+        "avg_races_per_season": 8,
+        "points_for_win": 8,
+        "description": "The dawn of F1 with front-engine cars"
+    },
+    "classic": {
+        "name": "Classic Era", 
+        "years": (1958, 1980),
+        "avg_races_per_season": 13,
+        "points_for_win": 9,
+        "description": "Rear-engine revolution to ground effect"
+    },
+    "turbo": {
+        "name": "Turbo Era",
+        "years": (1981, 1993),
+        "avg_races_per_season": 16,
+        "points_for_win": 9,
+        "description": "Turbocharged engines and electronic aids"
+    },
+    "modern": {
+        "name": "Modern Era",
+        "years": (1994, 2009),
+        "avg_races_per_season": 17,
+        "points_for_win": 10,
+        "description": "Safety reforms and global expansion"
+    },
+    "hybrid": {
+        "name": "Hybrid Era",
+        "years": (2010, 2025),
+        "avg_races_per_season": 21,
+        "points_for_win": 25,
+        "description": "High-downforce and hybrid power units"
+    }
+}
+
+def get_driver_era(first_year: int, last_year: int) -> str:
+    """Determine the primary era a driver competed in"""
+    mid_career = (first_year + last_year) // 2
+    for era_key, era in F1_ERAS.items():
+        if era["years"][0] <= mid_career <= era["years"][1]:
+            return era_key
+    return "hybrid"  # Default for recent drivers
+
+def get_era_normalization_factor(era_key: str) -> dict:
+    """Get normalization factors to compare across eras"""
+    era = F1_ERAS.get(era_key, F1_ERAS["hybrid"])
+    hybrid = F1_ERAS["hybrid"]
+    
+    # Normalize relative to hybrid era (baseline)
+    return {
+        "races_factor": hybrid["avg_races_per_season"] / era["avg_races_per_season"],
+        "points_factor": hybrid["points_for_win"] / era["points_for_win"],
+        "era_name": era["name"],
+        "era_key": era_key
+    }
+
 class GOATScore(BaseModel):
     driverId: int
     driverRef: str
