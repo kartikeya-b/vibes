@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Activity, Trophy, Flag, Users, TrendingUp, ChevronRight, Zap } from 'lucide-react';
@@ -6,10 +6,9 @@ import { getOverviewStats, getDriverStats, getConstructorStats } from '../lib/ap
 import { useFilters, FilterBar } from '../components/FilterBar';
 import { KPICard, ChartFrame, DataTable, PositionBadge, DriverTag } from '../components/F1Components';
 import { formatNumber } from '../lib/utils';
-import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -35,6 +34,17 @@ const AnalyticsStudio = () => {
   const [driverStats, setDriverStats] = useState([]);
   const [constructorStats, setConstructorStats] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Create a stable dependency string from filters
+  const filterDeps = useMemo(() => {
+    return JSON.stringify({
+      yearFrom: filters.yearFrom,
+      yearTo: filters.yearTo,
+      season: filters.season,
+      driverId: filters.driverId,
+      constructorId: filters.constructorId
+    });
+  }, [filters.yearFrom, filters.yearTo, filters.season, filters.driverId, filters.constructorId]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -67,7 +77,7 @@ const AnalyticsStudio = () => {
     };
 
     fetchData();
-  }, [filters]);
+  }, [filterDeps]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const driverColumns = [
     { 
@@ -133,12 +143,14 @@ const AnalyticsStudio = () => {
   ];
 
   // Prepare chart data
-  const topDriversChartData = driverStats.slice(0, 10).map(d => ({
-    name: d.code || d.surname.substring(0, 3).toUpperCase(),
-    wins: d.wins,
-    podiums: d.podiums,
-    poles: d.poles
-  }));
+  const topDriversChartData = useMemo(() => {
+    return driverStats.slice(0, 10).map(d => ({
+      name: d.code || d.surname.substring(0, 3).toUpperCase(),
+      wins: d.wins,
+      podiums: d.podiums,
+      poles: d.poles
+    }));
+  }, [driverStats]);
 
   return (
     <div className="min-h-screen bg-void" data-testid="analytics-studio">
@@ -229,28 +241,30 @@ const AnalyticsStudio = () => {
             {/* Top Drivers Chart */}
             <ChartFrame title="Top Drivers Performance" loading={loading}>
               <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topDriversChartData} barGap={2}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#252932" />
-                    <XAxis 
-                      dataKey="name" 
-                      tick={{ fill: '#94A3B8', fontSize: 12, fontFamily: 'JetBrains Mono' }}
-                      axisLine={{ stroke: '#252932' }}
-                    />
-                    <YAxis 
-                      tick={{ fill: '#94A3B8', fontSize: 12, fontFamily: 'JetBrains Mono' }}
-                      axisLine={{ stroke: '#252932' }}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend 
-                      wrapperStyle={{ paddingTop: '20px' }}
-                      formatter={(value) => <span className="text-slate-400 text-sm">{value}</span>}
-                    />
-                    <Bar dataKey="wins" name="Wins" fill="#FF1E1E" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="podiums" name="Podiums" fill="#00F0FF" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="poles" name="Poles" fill="#C084FC" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {topDriversChartData.length > 0 && (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={topDriversChartData} barGap={2}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#252932" />
+                      <XAxis 
+                        dataKey="name" 
+                        tick={{ fill: '#94A3B8', fontSize: 12, fontFamily: 'JetBrains Mono' }}
+                        axisLine={{ stroke: '#252932' }}
+                      />
+                      <YAxis 
+                        tick={{ fill: '#94A3B8', fontSize: 12, fontFamily: 'JetBrains Mono' }}
+                        axisLine={{ stroke: '#252932' }}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend 
+                        wrapperStyle={{ paddingTop: '20px' }}
+                        formatter={(value) => <span className="text-slate-400 text-sm">{value}</span>}
+                      />
+                      <Bar dataKey="wins" name="Wins" fill="#FF1E1E" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="podiums" name="Podiums" fill="#00F0FF" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="poles" name="Poles" fill="#C084FC" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </ChartFrame>
 
