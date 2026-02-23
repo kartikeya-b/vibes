@@ -48,9 +48,9 @@ F1 Intelligence is a premium-feeling, dark-themed web app that lets users explor
 - All implemented ✅
 
 ### P1 (High Priority)
-- [ ] Constructor profile in Story Explorer
-- [ ] Season profile/summary view
-- [ ] Circuit-by-circuit breakdown in Rivalry Explorer
+- ✅ Constructor profile in Story Explorer (DONE)
+- ✅ Season profile/summary view (DONE)
+- ✅ Circuit-by-circuit breakdown in Rivalry Explorer (DONE)
 - [ ] Mobile-optimized filter drawer
 
 ### P2 (Medium Priority)
