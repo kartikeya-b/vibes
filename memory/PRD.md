@@ -66,8 +66,12 @@ F1 Intelligence is a premium-feeling, dark-themed web app that lets users explor
 - [ ] Era-adjusted statistics
 
 ## Next Tasks
-1. Implement constructor profile in Story Explorer
-2. Add season profile view
-3. Enhance Rivalry Explorer with circuit breakdown
-4. Add social share preview for fact cards
-5. Consider Emergent Google Auth for user accounts
+1. Await user's list of bugs and improvements (user confirmed they would share this)
+2. Add social share preview for fact cards
+3. Mobile-optimized filter drawer
+4. Consider Emergent Google Auth for user accounts
+
+## Session Log - Feb 23, 2026
+- Verified application is fully functional after handoff (no crash - previous issue resolved)
+- Tested Analytics Studio, Story Explorer, and Rivalry Explorer - all working
+- Confirmed circuit-by-circuit breakdown returns 32 circuits for Hamilton vs Verstappen comparison
