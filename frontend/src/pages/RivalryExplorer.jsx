@@ -1,23 +1,106 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Users, Trophy, Flag, Target, AlertCircle, Map } from 'lucide-react';
+import { Users, Trophy, Flag, Target, AlertCircle, Map, Search, X } from 'lucide-react';
 import { getDrivers, getHeadToHead } from '../lib/api';
 import { ChartFrame, EmptyState } from '../components/F1Components';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Skeleton } from '../components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Search } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../components/ui/command';
+
+// Searchable Driver Select with proper UX
+const DriverSelect = ({ value, onValueChange, drivers, otherDriverId, accentColor, placeholder, testId }) => {
+  const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const filteredDrivers = useMemo(() => {
+    if (!searchQuery) return drivers.slice(0, 100);
+    const query = searchQuery.toLowerCase();
+    return drivers.filter(d => {
+      const fullName = `${d.forename} ${d.surname}`.toLowerCase();
+      const code = d.code?.toLowerCase() || '';
+      return fullName.includes(query) || code.includes(query);
+    }).slice(0, 100);
+  }, [drivers, searchQuery]);
+  
+  const selectedDriver = drivers.find(d => d.driverId === value);
+  
+  const getDisplayText = (driver) => {
+    if (!driver) return placeholder;
+    return `${driver.code ? driver.code + ' - ' : ''}${driver.forename} ${driver.surname}`;
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={`w-full justify-between bg-surface-200 border-white/10 h-12 text-left font-normal ${accentColor === 'cyan' ? 'border-l-4 border-l-racing-cyan' : 'border-r-4 border-r-racing-red'}`}
+          data-testid={testId}
+        >
+          <span className={selectedDriver ? 'text-white' : 'text-slate-400'}>
+            {selectedDriver ? getDisplayText(selectedDriver) : placeholder}
+          </span>
+          <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0 bg-surface-200 border-white/10" align="start">
+        <Command className="bg-transparent">
+          <CommandInput 
+            placeholder="Type to search drivers..." 
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+            className="bg-transparent border-white/10"
+          />
+          <CommandList className="max-h-72">
+            <CommandEmpty>No drivers found.</CommandEmpty>
+            <CommandGroup>
+              {filteredDrivers.map((driver) => {
+                const isDisabled = driver.driverId === otherDriverId;
+                return (
+                  <CommandItem
+                    key={driver.driverId}
+                    value={`${driver.forename} ${driver.surname} ${driver.code || ''}`}
+                    onSelect={() => {
+                      if (!isDisabled) {
+                        onValueChange(driver.driverId);
+                        setOpen(false);
+                        setSearchQuery('');
+                      }
+                    }}
+                    disabled={isDisabled}
+                    className={`cursor-pointer ${isDisabled ? 'opacity-50' : ''}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {driver.code && (
+                        <span className={`font-mono text-sm ${accentColor === 'cyan' ? 'text-racing-cyan' : 'text-racing-red'}`}>
+                          {driver.code}
+                        </span>
+                      )}
+                      <span>{driver.forename} {driver.surname}</span>
+                    </div>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 const RivalryExplorer = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   
   const [drivers, setDrivers] = useState([]);
-  const [driverSearch, setDriverSearch] = useState('');
   const [driver1Id, setDriver1Id] = useState(searchParams.get('d1') ? parseInt(searchParams.get('d1')) : null);
   const [driver2Id, setDriver2Id] = useState(searchParams.get('d2') ? parseInt(searchParams.get('d2')) : null);
   const [sameTeamOnly, setSameTeamOnly] = useState(false);
@@ -27,12 +110,10 @@ const RivalryExplorer = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch drivers
+  // Fetch all drivers once
   useEffect(() => {
-    const params = { limit: 200 };
-    if (driverSearch) params.search = driverSearch;
-    getDrivers(params).then(setDrivers).catch(console.error);
-  }, [driverSearch]);
+    getDrivers({ limit: 1000 }).then(setDrivers).catch(console.error);
+  }, []);
 
   // Fetch H2H data
   useEffect(() => {
@@ -120,31 +201,15 @@ const RivalryExplorer = () => {
             {/* Driver 1 */}
             <div className="flex-1">
               <Label className="data-label mb-2 block">Driver 1</Label>
-              <Select value={driver1Id?.toString() || "none"} onValueChange={(v) => v !== "none" && setDriver1Id(parseInt(v))}>
-                <SelectTrigger className="bg-surface-200 border-white/10 border-l-4 border-l-racing-cyan" data-testid="driver1-select">
-                  <SelectValue placeholder="Select First Driver" />
-                </SelectTrigger>
-                <SelectContent className="bg-surface-200 border-white/10 max-h-80">
-                  <div className="p-2 sticky top-0 bg-surface-200">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                      <Input 
-                        placeholder="Search..."
-                        value={driverSearch}
-                        onChange={(e) => setDriverSearch(e.target.value)}
-                        className="pl-10 bg-surface-300 border-white/10"
-                      />
-                    </div>
-                  </div>
-                  <SelectItem value="none" disabled>Select Driver</SelectItem>
-                  {drivers.map(d => (
-                    <SelectItem key={d.driverId} value={d.driverId.toString()} disabled={d.driverId === driver2Id}>
-                      {d.code && <span className="font-mono text-racing-cyan mr-2">{d.code}</span>}
-                      {d.forename} {d.surname}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <DriverSelect
+                value={driver1Id}
+                onValueChange={setDriver1Id}
+                drivers={drivers}
+                otherDriverId={driver2Id}
+                accentColor="cyan"
+                placeholder="Select First Driver"
+                testId="driver1-select"
+              />
             </div>
             
             <div className="hidden md:flex items-center justify-center w-12">
@@ -154,31 +219,15 @@ const RivalryExplorer = () => {
             {/* Driver 2 */}
             <div className="flex-1">
               <Label className="data-label mb-2 block">Driver 2</Label>
-              <Select value={driver2Id?.toString() || "none"} onValueChange={(v) => v !== "none" && setDriver2Id(parseInt(v))}>
-                <SelectTrigger className="bg-surface-200 border-white/10 border-r-4 border-r-racing-red" data-testid="driver2-select">
-                  <SelectValue placeholder="Select Second Driver" />
-                </SelectTrigger>
-                <SelectContent className="bg-surface-200 border-white/10 max-h-80">
-                  <div className="p-2 sticky top-0 bg-surface-200">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                      <Input 
-                        placeholder="Search..."
-                        value={driverSearch}
-                        onChange={(e) => setDriverSearch(e.target.value)}
-                        className="pl-10 bg-surface-300 border-white/10"
-                      />
-                    </div>
-                  </div>
-                  <SelectItem value="none" disabled>Select Driver</SelectItem>
-                  {drivers.map(d => (
-                    <SelectItem key={d.driverId} value={d.driverId.toString()} disabled={d.driverId === driver1Id}>
-                      {d.code && <span className="font-mono text-racing-red mr-2">{d.code}</span>}
-                      {d.forename} {d.surname}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <DriverSelect
+                value={driver2Id}
+                onValueChange={setDriver2Id}
+                drivers={drivers}
+                otherDriverId={driver1Id}
+                accentColor="red"
+                placeholder="Select Second Driver"
+                testId="driver2-select"
+              />
             </div>
           </div>
           
