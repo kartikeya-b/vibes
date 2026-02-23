@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trophy, SlidersHorizontal, Info, ChevronRight, RotateCcw } from 'lucide-react';
+import { Trophy, SlidersHorizontal, Info, ChevronRight, RotateCcw, Play } from 'lucide-react';
 import { getGoatLeaderboard } from '../lib/api';
 import { ChartFrame, DataTable, PositionBadge, DriverTag } from '../components/F1Components';
 import { formatNumber } from '../lib/utils';
@@ -58,32 +58,46 @@ const CustomTooltip = ({ active, payload }) => {
 const GOATEngine = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   
-  const [weights, setWeights] = useState(() => {
+  // Applied weights (what's currently shown in leaderboard)
+  const [appliedWeights, setAppliedWeights] = useState(() => {
     const preset = searchParams.get('preset');
     if (preset && PRESETS[preset]) return PRESETS[preset];
     return PRESETS.balanced;
   });
-  const [minRaces, setMinRaces] = useState(parseInt(searchParams.get('minRaces')) || 50);
-  const [normalizePerRace, setNormalizePerRace] = useState(searchParams.get('normalize') === 'true');
+  const [appliedMinRaces, setAppliedMinRaces] = useState(parseInt(searchParams.get('minRaces')) || 50);
+  const [appliedNormalize, setAppliedNormalize] = useState(searchParams.get('normalize') === 'true');
+  
+  // Pending weights (what user is configuring)
+  const [pendingWeights, setPendingWeights] = useState(appliedWeights);
+  const [pendingMinRaces, setPendingMinRaces] = useState(appliedMinRaces);
+  const [pendingNormalize, setPendingNormalize] = useState(appliedNormalize);
   
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDriver, setSelectedDriver] = useState(null);
 
+  // Check if pending settings differ from applied settings
+  const hasUnappliedChanges = useMemo(() => {
+    const weightsChanged = JSON.stringify(pendingWeights) !== JSON.stringify(appliedWeights);
+    const minRacesChanged = pendingMinRaces !== appliedMinRaces;
+    const normalizeChanged = pendingNormalize !== appliedNormalize;
+    return weightsChanged || minRacesChanged || normalizeChanged;
+  }, [pendingWeights, appliedWeights, pendingMinRaces, appliedMinRaces, pendingNormalize, appliedNormalize]);
+
   // Convert weights to query string
   const weightsString = useMemo(() => {
-    return Object.entries(weights).map(([k, v]) => `${k}:${v}`).join(',');
-  }, [weights]);
+    return Object.entries(appliedWeights).map(([k, v]) => `${k}:${v}`).join(',');
+  }, [appliedWeights]);
 
-  // Fetch leaderboard
+  // Fetch leaderboard when applied settings change
   useEffect(() => {
     const fetchLeaderboard = async () => {
       setLoading(true);
       try {
         const data = await getGoatLeaderboard({
           weights: weightsString,
-          min_races: minRaces,
-          normalize_per_race: normalizePerRace,
+          min_races: appliedMinRaces,
+          normalize_per_race: appliedNormalize,
           limit: 100
         });
         setLeaderboard(data);
@@ -91,8 +105,8 @@ const GOATEngine = () => {
         // Update URL
         setSearchParams({
           weights: weightsString,
-          minRaces: minRaces.toString(),
-          normalize: normalizePerRace.toString()
+          minRaces: appliedMinRaces.toString(),
+          normalize: appliedNormalize.toString()
         }, { replace: true });
       } catch (err) {
         console.error('Failed to fetch GOAT leaderboard:', err);
@@ -102,23 +116,30 @@ const GOATEngine = () => {
     };
     
     fetchLeaderboard();
-  }, [weightsString, minRaces, normalizePerRace, setSearchParams]);
+  }, [weightsString, appliedMinRaces, appliedNormalize, setSearchParams]);
+
+  // Apply pending changes
+  const handleApplyChanges = useCallback(() => {
+    setAppliedWeights(pendingWeights);
+    setAppliedMinRaces(pendingMinRaces);
+    setAppliedNormalize(pendingNormalize);
+  }, [pendingWeights, pendingMinRaces, pendingNormalize]);
 
   const updateWeight = (key, value) => {
-    setWeights(prev => ({ ...prev, [key]: value }));
+    setPendingWeights(prev => ({ ...prev, [key]: value }));
   };
 
   const applyPreset = (presetKey) => {
-    setWeights(PRESETS[presetKey]);
+    setPendingWeights(PRESETS[presetKey]);
   };
 
   const resetWeights = () => {
-    setWeights(PRESETS.balanced);
-    setMinRaces(50);
-    setNormalizePerRace(false);
+    setPendingWeights(PRESETS.balanced);
+    setPendingMinRaces(50);
+    setPendingNormalize(false);
   };
 
-  const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+  const totalWeight = Object.values(pendingWeights).reduce((a, b) => a + b, 0);
 
   const columns = [
     { 
@@ -235,7 +256,7 @@ const GOATEngine = () => {
 
               {/* Weight Sliders */}
               <div className="space-y-5">
-                {Object.entries(weights).map(([key, value]) => (
+                {Object.entries(pendingWeights).map(([key, value]) => (
                   <div key={key}>
                     <div className="flex items-center justify-between mb-2">
                       <Label className="text-sm text-slate-300">{WEIGHT_LABELS[key]}</Label>
@@ -269,8 +290,8 @@ const GOATEngine = () => {
                   <Label className="text-sm text-slate-300 mb-2 block">Minimum Races</Label>
                   <Input
                     type="number"
-                    value={minRaces}
-                    onChange={(e) => setMinRaces(parseInt(e.target.value) || 0)}
+                    value={pendingMinRaces}
+                    onChange={(e) => setPendingMinRaces(parseInt(e.target.value) || 0)}
                     min={0}
                     max={500}
                     className="bg-surface-200 border-white/10"
@@ -281,14 +302,34 @@ const GOATEngine = () => {
                 <div className="flex items-center gap-3">
                   <Switch 
                     id="normalize" 
-                    checked={normalizePerRace} 
-                    onCheckedChange={setNormalizePerRace}
+                    checked={pendingNormalize} 
+                    onCheckedChange={setPendingNormalize}
                     data-testid="normalize-toggle"
                   />
                   <Label htmlFor="normalize" className="text-sm text-slate-400">
                     Normalize per race
                   </Label>
                 </div>
+              </div>
+
+              {/* GO Button */}
+              <div className="mt-6 pt-4 border-t border-white/10">
+                <Button 
+                  onClick={handleApplyChanges}
+                  disabled={!hasUnappliedChanges}
+                  className={`w-full ${hasUnappliedChanges 
+                    ? 'bg-racing-cyan text-black hover:bg-racing-cyan/80' 
+                    : 'bg-surface-300 text-slate-500'}`}
+                  data-testid="calculate-goat"
+                >
+                  <Play className="w-4 h-4 mr-2" />
+                  {hasUnappliedChanges ? 'Calculate Rankings' : 'Rankings Up to Date'}
+                </Button>
+                {hasUnappliedChanges && (
+                  <p className="text-xs text-racing-yellow text-center mt-2">
+                    Click to apply your weight changes
+                  </p>
+                )}
               </div>
             </div>
           </motion.div>
