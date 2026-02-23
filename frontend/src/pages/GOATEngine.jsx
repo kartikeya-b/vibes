@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trophy, SlidersHorizontal, Info, ChevronRight, RotateCcw, Play } from 'lucide-react';
-import { getGoatLeaderboard } from '../lib/api';
+import { Trophy, SlidersHorizontal, Info, ChevronRight, RotateCcw, Play, Clock, Zap, History } from 'lucide-react';
+import { getGoatLeaderboard, getEras } from '../lib/api';
 import { ChartFrame, DataTable, PositionBadge, DriverTag } from '../components/F1Components';
 import { formatNumber } from '../lib/utils';
 import { Slider } from '../components/ui/slider';
@@ -13,8 +13,10 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Skeleton } from '../components/ui/skeleton';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../components/ui/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell
 } from 'recharts';
 
 const PRESETS = {
@@ -44,6 +46,14 @@ const WEIGHT_COLORS = {
   championships: '#3B82F6'
 };
 
+const ERA_COLORS = {
+  pioneer: '#D97706',
+  classic: '#059669',
+  turbo: '#7C3AED',
+  modern: '#2563EB',
+  hybrid: '#DC2626'
+};
+
 const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
   const data = payload[0].payload;
@@ -52,6 +62,19 @@ const CustomTooltip = ({ active, payload }) => {
       <p className="text-white font-semibold mb-2">{data.name}</p>
       <p className="text-slate-400 text-sm">Contribution: <span className="font-mono text-white">{data.value.toFixed(1)}</span></p>
     </div>
+  );
+};
+
+const EraBadge = ({ era, eraKey }) => {
+  if (!era) return null;
+  const color = ERA_COLORS[eraKey] || '#6B7280';
+  return (
+    <span 
+      className="text-xs px-2 py-0.5 rounded-full font-medium"
+      style={{ backgroundColor: `${color}20`, color: color, border: `1px solid ${color}40` }}
+    >
+      {era}
+    </span>
   );
 };
 
@@ -66,23 +89,32 @@ const GOATEngine = () => {
   });
   const [appliedMinRaces, setAppliedMinRaces] = useState(parseInt(searchParams.get('minRaces')) || 50);
   const [appliedNormalize, setAppliedNormalize] = useState(searchParams.get('normalize') === 'true');
+  const [appliedEraAdjusted, setAppliedEraAdjusted] = useState(searchParams.get('eraAdjusted') === 'true');
   
   // Pending weights (what user is configuring)
   const [pendingWeights, setPendingWeights] = useState(appliedWeights);
   const [pendingMinRaces, setPendingMinRaces] = useState(appliedMinRaces);
   const [pendingNormalize, setPendingNormalize] = useState(appliedNormalize);
+  const [pendingEraAdjusted, setPendingEraAdjusted] = useState(appliedEraAdjusted);
   
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDriver, setSelectedDriver] = useState(null);
+  const [eras, setEras] = useState({});
+
+  // Fetch era definitions
+  useEffect(() => {
+    getEras().then(data => setEras(data.eras)).catch(console.error);
+  }, []);
 
   // Check if pending settings differ from applied settings
   const hasUnappliedChanges = useMemo(() => {
     const weightsChanged = JSON.stringify(pendingWeights) !== JSON.stringify(appliedWeights);
     const minRacesChanged = pendingMinRaces !== appliedMinRaces;
     const normalizeChanged = pendingNormalize !== appliedNormalize;
-    return weightsChanged || minRacesChanged || normalizeChanged;
-  }, [pendingWeights, appliedWeights, pendingMinRaces, appliedMinRaces, pendingNormalize, appliedNormalize]);
+    const eraAdjustedChanged = pendingEraAdjusted !== appliedEraAdjusted;
+    return weightsChanged || minRacesChanged || normalizeChanged || eraAdjustedChanged;
+  }, [pendingWeights, appliedWeights, pendingMinRaces, appliedMinRaces, pendingNormalize, appliedNormalize, pendingEraAdjusted, appliedEraAdjusted]);
 
   // Convert weights to query string
   const weightsString = useMemo(() => {
@@ -98,6 +130,7 @@ const GOATEngine = () => {
           weights: weightsString,
           min_races: appliedMinRaces,
           normalize_per_race: appliedNormalize,
+          era_adjusted: appliedEraAdjusted,
           limit: 100
         });
         setLeaderboard(data);
@@ -106,7 +139,8 @@ const GOATEngine = () => {
         setSearchParams({
           weights: weightsString,
           minRaces: appliedMinRaces.toString(),
-          normalize: appliedNormalize.toString()
+          normalize: appliedNormalize.toString(),
+          eraAdjusted: appliedEraAdjusted.toString()
         }, { replace: true });
       } catch (err) {
         console.error('Failed to fetch GOAT leaderboard:', err);
@@ -116,14 +150,15 @@ const GOATEngine = () => {
     };
     
     fetchLeaderboard();
-  }, [weightsString, appliedMinRaces, appliedNormalize, setSearchParams]);
+  }, [weightsString, appliedMinRaces, appliedNormalize, appliedEraAdjusted, setSearchParams]);
 
   // Apply pending changes
   const handleApplyChanges = useCallback(() => {
     setAppliedWeights(pendingWeights);
     setAppliedMinRaces(pendingMinRaces);
     setAppliedNormalize(pendingNormalize);
-  }, [pendingWeights, pendingMinRaces, pendingNormalize]);
+    setAppliedEraAdjusted(pendingEraAdjusted);
+  }, [pendingWeights, pendingMinRaces, pendingNormalize, pendingEraAdjusted]);
 
   const updateWeight = (key, value) => {
     setPendingWeights(prev => ({ ...prev, [key]: value }));
@@ -137,11 +172,12 @@ const GOATEngine = () => {
     setPendingWeights(PRESETS.balanced);
     setPendingMinRaces(50);
     setPendingNormalize(false);
+    setPendingEraAdjusted(false);
   };
 
   const totalWeight = Object.values(pendingWeights).reduce((a, b) => a + b, 0);
 
-  const columns = [
+  const columns = useMemo(() => [
     { 
       key: 'rank', 
       label: '#', 
@@ -152,12 +188,15 @@ const GOATEngine = () => {
       key: 'driver', 
       label: 'Driver',
       render: (_, row) => (
-        <button 
-          onClick={() => setSelectedDriver(row)}
-          className="text-left hover:text-racing-cyan transition-colors"
-        >
-          <DriverTag driver={row} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setSelectedDriver(row)}
+            className="text-left hover:text-racing-cyan transition-colors"
+          >
+            <DriverTag driver={row} />
+          </button>
+          {row.era && <EraBadge era={row.era} eraKey={row.era_key} />}
+        </div>
       )
     },
     { 
@@ -167,8 +206,22 @@ const GOATEngine = () => {
         <span className="font-mono text-lg font-bold text-racing-yellow">{val.toFixed(1)}</span>
       )
     },
-    { key: 'wins', label: 'Wins', mono: true, render: (_, row) => row.stats.wins },
-    { key: 'podiums', label: 'Podiums', mono: true, render: (_, row) => row.stats.podiums },
+    { 
+      key: 'wins', 
+      label: appliedEraAdjusted ? 'Wins (Adj)' : 'Wins', 
+      mono: true, 
+      render: (_, row) => appliedEraAdjusted && row.era_adjusted_stats 
+        ? <span title={`Raw: ${row.stats.wins}`}>{row.era_adjusted_stats.wins}</span>
+        : row.stats.wins 
+    },
+    { 
+      key: 'podiums', 
+      label: appliedEraAdjusted ? 'Podiums (Adj)' : 'Podiums', 
+      mono: true, 
+      render: (_, row) => appliedEraAdjusted && row.era_adjusted_stats
+        ? <span title={`Raw: ${row.stats.podiums}`}>{row.era_adjusted_stats.podiums}</span>
+        : row.stats.podiums 
+    },
     { key: 'poles', label: 'Poles', mono: true, render: (_, row) => row.stats.poles },
     { 
       key: 'championships', 
@@ -183,7 +236,7 @@ const GOATEngine = () => {
       mono: true,
       render: (_, row) => row.stats.races
     },
-  ];
+  ], [appliedEraAdjusted]);
 
   // Prepare breakdown chart data for selected driver
   const breakdownData = selectedDriver ? Object.entries(selectedDriver.breakdown).map(([key, value]) => ({
@@ -310,6 +363,44 @@ const GOATEngine = () => {
                     Normalize per race
                   </Label>
                 </div>
+
+                {/* Era Adjustment Toggle */}
+                <div className="bg-surface-200 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Switch 
+                      id="era-adjusted" 
+                      checked={pendingEraAdjusted} 
+                      onCheckedChange={setPendingEraAdjusted}
+                      data-testid="era-adjusted-toggle"
+                    />
+                    <Label htmlFor="era-adjusted" className="text-sm text-white flex items-center gap-2">
+                      <History className="w-4 h-4 text-racing-purple" />
+                      Era-Adjusted Comparison
+                    </Label>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Normalizes stats across different F1 eras accounting for season lengths and points systems
+                  </p>
+                  
+                  {pendingEraAdjusted && (
+                    <div className="mt-3 pt-3 border-t border-white/10">
+                      <span className="text-xs text-slate-400 block mb-2">Era Definitions:</span>
+                      <div className="space-y-1.5">
+                        {Object.entries(eras).map(([key, era]) => (
+                          <div key={key} className="flex items-center gap-2 text-xs">
+                            <span 
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: ERA_COLORS[key] }}
+                            />
+                            <span className="text-slate-400">{era.years[0]}-{era.years[1]}:</span>
+                            <span className="text-white">{era.name}</span>
+                            <span className="text-slate-500">({era.avg_races_per_season} races/yr)</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* GO Button */}
@@ -327,7 +418,7 @@ const GOATEngine = () => {
                 </Button>
                 {hasUnappliedChanges && (
                   <p className="text-xs text-racing-yellow text-center mt-2">
-                    Click to apply your weight changes
+                    Click to apply your changes
                   </p>
                 )}
               </div>
@@ -342,12 +433,20 @@ const GOATEngine = () => {
             className="lg:col-span-2"
           >
             <ChartFrame 
-              title="GOAT Leaderboard" 
+              title={appliedEraAdjusted ? "Era-Adjusted GOAT Leaderboard" : "GOAT Leaderboard"}
               loading={loading}
               actions={
-                <span className="text-sm text-slate-500">
-                  {leaderboard.length} drivers
-                </span>
+                <div className="flex items-center gap-3">
+                  {appliedEraAdjusted && (
+                    <Badge className="bg-racing-purple/20 text-racing-purple border-racing-purple/40">
+                      <History className="w-3 h-3 mr-1" />
+                      Era Adjusted
+                    </Badge>
+                  )}
+                  <span className="text-sm text-slate-500">
+                    {leaderboard.length} drivers
+                  </span>
+                </div>
               }
             >
               <DataTable 
@@ -357,6 +456,44 @@ const GOATEngine = () => {
                 emptyMessage="No drivers match the current criteria"
               />
             </ChartFrame>
+
+            {/* Era Legend */}
+            {appliedEraAdjusted && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="mt-4 bg-surface-100 border border-white/10 rounded-lg p-4"
+              >
+                <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                  <Info className="w-4 h-4 text-slate-400" />
+                  How Era Adjustment Works
+                </h4>
+                <p className="text-xs text-slate-400 mb-3">
+                  Statistics are normalized to the modern hybrid era (2010-present) as a baseline. 
+                  Drivers from shorter seasons have their wins/podiums scaled up proportionally, 
+                  and points are adjusted for different scoring systems.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(eras).map(([key, era]) => (
+                    <TooltipProvider key={key}>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <EraBadge era={era.name} eraKey={key} />
+                        </TooltipTrigger>
+                        <TooltipContent className="bg-surface-200 border-white/10">
+                          <p className="font-semibold">{era.name}</p>
+                          <p className="text-slate-400 text-xs">{era.years[0]}-{era.years[1]}</p>
+                          <p className="text-slate-400 text-xs">{era.description}</p>
+                          <p className="text-slate-400 text-xs mt-1">
+                            ~{era.avg_races_per_season} races/season, {era.points_for_win}pts for win
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ))}
+                </div>
+              </motion.div>
+            )}
           </motion.div>
         </div>
 
@@ -376,7 +513,10 @@ const GOATEngine = () => {
                     <h3 className="font-heading text-2xl font-bold text-white">
                       {selectedDriver.forename} {selectedDriver.surname}
                     </h3>
-                    <span className="text-slate-500">{selectedDriver.nationality}</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-slate-500">{selectedDriver.nationality}</span>
+                      {selectedDriver.era && <EraBadge era={selectedDriver.era} eraKey={selectedDriver.era_key} />}
+                    </div>
                   </div>
 
                   <div className="bg-surface-200 rounded-lg p-4 mb-6">
@@ -398,7 +538,7 @@ const GOATEngine = () => {
                           tick={{ fill: '#94A3B8', fontSize: 11 }}
                           width={100}
                         />
-                        <Tooltip content={<CustomTooltip />} />
+                        <RechartsTooltip content={<CustomTooltip />} />
                         <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                           {breakdownData.map((entry, index) => (
                             <Cell key={index} fill={entry.color} />
@@ -407,6 +547,31 @@ const GOATEngine = () => {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
+
+                  {/* Raw vs Adjusted Stats */}
+                  {appliedEraAdjusted && selectedDriver.era_adjusted_stats && (
+                    <div className="mb-6">
+                      <span className="data-label block mb-3">Era-Adjusted Statistics</span>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-surface-200 rounded p-3">
+                          <span className="text-xs text-slate-500">Raw Wins</span>
+                          <span className="block font-mono text-lg text-white">{selectedDriver.stats.wins}</span>
+                        </div>
+                        <div className="bg-racing-purple/10 border border-racing-purple/30 rounded p-3">
+                          <span className="text-xs text-racing-purple">Adjusted Wins</span>
+                          <span className="block font-mono text-lg text-white">{selectedDriver.era_adjusted_stats.wins}</span>
+                        </div>
+                        <div className="bg-surface-200 rounded p-3">
+                          <span className="text-xs text-slate-500">Raw Podiums</span>
+                          <span className="block font-mono text-lg text-white">{selectedDriver.stats.podiums}</span>
+                        </div>
+                        <div className="bg-racing-purple/10 border border-racing-purple/30 rounded p-3">
+                          <span className="text-xs text-racing-purple">Adjusted Podiums</span>
+                          <span className="block font-mono text-lg text-white">{selectedDriver.era_adjusted_stats.podiums}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Raw Stats */}
                   <div>
