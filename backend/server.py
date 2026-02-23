@@ -1242,6 +1242,14 @@ async def get_circuit_profile(circuit_id: int):
             "surname": {"$first": "$driver.surname"},
             "wins": {"$sum": 1}
         }},
+        {"$project": {
+            "_id": 0,
+            "driverId": "$_id",
+            "driverRef": 1,
+            "forename": 1,
+            "surname": 1,
+            "wins": 1
+        }},
         {"$sort": {"wins": -1}},
         {"$limit": 10}
     ]
