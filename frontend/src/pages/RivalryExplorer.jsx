@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Users, Trophy, Flag, Target, ChevronRight, AlertCircle } from 'lucide-react';
+import { Users, Trophy, Flag, Target, AlertCircle, Map } from 'lucide-react';
 import { getDrivers, getHeadToHead } from '../lib/api';
-import { ChartFrame, StatCard, DriverTag, EmptyState } from '../components/F1Components';
+import { ChartFrame, EmptyState } from '../components/F1Components';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Skeleton } from '../components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Search } from 'lucide-react';
 
 const RivalryExplorer = () => {
@@ -20,6 +21,7 @@ const RivalryExplorer = () => {
   const [driver1Id, setDriver1Id] = useState(searchParams.get('d1') ? parseInt(searchParams.get('d1')) : null);
   const [driver2Id, setDriver2Id] = useState(searchParams.get('d2') ? parseInt(searchParams.get('d2')) : null);
   const [sameTeamOnly, setSameTeamOnly] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
   
   const [h2hData, setH2hData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -118,7 +120,7 @@ const RivalryExplorer = () => {
             {/* Driver 1 */}
             <div className="flex-1">
               <Label className="data-label mb-2 block">Driver 1</Label>
-              <Select value={driver1Id?.toString() || ""} onValueChange={(v) => setDriver1Id(parseInt(v))}>
+              <Select value={driver1Id?.toString() || "none"} onValueChange={(v) => v !== "none" && setDriver1Id(parseInt(v))}>
                 <SelectTrigger className="bg-surface-200 border-white/10 border-l-4 border-l-racing-cyan" data-testid="driver1-select">
                   <SelectValue placeholder="Select First Driver" />
                 </SelectTrigger>
@@ -134,6 +136,7 @@ const RivalryExplorer = () => {
                       />
                     </div>
                   </div>
+                  <SelectItem value="none" disabled>Select Driver</SelectItem>
                   {drivers.map(d => (
                     <SelectItem key={d.driverId} value={d.driverId.toString()} disabled={d.driverId === driver2Id}>
                       {d.code && <span className="font-mono text-racing-cyan mr-2">{d.code}</span>}
@@ -151,7 +154,7 @@ const RivalryExplorer = () => {
             {/* Driver 2 */}
             <div className="flex-1">
               <Label className="data-label mb-2 block">Driver 2</Label>
-              <Select value={driver2Id?.toString() || ""} onValueChange={(v) => setDriver2Id(parseInt(v))}>
+              <Select value={driver2Id?.toString() || "none"} onValueChange={(v) => v !== "none" && setDriver2Id(parseInt(v))}>
                 <SelectTrigger className="bg-surface-200 border-white/10 border-r-4 border-r-racing-red" data-testid="driver2-select">
                   <SelectValue placeholder="Select Second Driver" />
                 </SelectTrigger>
@@ -167,6 +170,7 @@ const RivalryExplorer = () => {
                       />
                     </div>
                   </div>
+                  <SelectItem value="none" disabled>Select Driver</SelectItem>
                   {drivers.map(d => (
                     <SelectItem key={d.driverId} value={d.driverId.toString()} disabled={d.driverId === driver1Id}>
                       {d.code && <span className="font-mono text-racing-red mr-2">{d.code}</span>}
@@ -257,84 +261,212 @@ const RivalryExplorer = () => {
               </div>
             </motion.div>
 
-            {/* Stats Comparison */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <ChartFrame title="Head-to-Head Statistics" loading={false}>
-                <div className="divide-y divide-white/5">
-                  <StatRow label="Qualifying" statKey="quali_h2h" icon={Target} />
-                  <StatRow label="Race Finish" statKey="race_h2h" icon={Flag} />
-                  <StatRow label="Points" statKey="points_h2h" icon={Trophy} />
-                  <StatRow label="Wins" statKey="wins_h2h" icon={Trophy} />
-                  <StatRow label="Podiums" statKey="podiums_h2h" icon={Trophy} />
-                </div>
-              </ChartFrame>
-            </motion.div>
+            {/* Tabs for Overview and Circuit Breakdown */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+              <TabsList className="bg-surface-100 border border-white/10 p-1">
+                <TabsTrigger 
+                  value="overview" 
+                  className="data-[state=active]:bg-white data-[state=active]:text-black"
+                  data-testid="tab-overview"
+                >
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="circuits"
+                  className="data-[state=active]:bg-white data-[state=active]:text-black"
+                  data-testid="tab-circuits"
+                >
+                  <Map className="w-4 h-4 mr-2" />
+                  Circuit Breakdown
+                </TabsTrigger>
+              </TabsList>
 
-            {/* Summary Cards */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="grid md:grid-cols-2 gap-6 mt-6"
-            >
-              <div className="bg-surface-100 border border-white/10 rounded-lg p-6">
-                <h3 className="font-heading text-lg font-semibold uppercase text-white mb-4 flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-racing-cyan" />
-                  {h2hData.driver1.forename} {h2hData.driver1.surname}
-                </h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <span className="data-label block mb-1">Quali Wins</span>
-                    <span className="text-2xl font-mono font-bold text-white">
-                      {h2hData.quali_h2h[h2hData.driver1.driverRef]}
-                    </span>
+              <TabsContent value="overview" className="space-y-6">
+                {/* Stats Comparison */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  <ChartFrame title="Head-to-Head Statistics" loading={false}>
+                    <div className="divide-y divide-white/5">
+                      <StatRow label="Qualifying" statKey="quali_h2h" icon={Target} />
+                      <StatRow label="Race Finish" statKey="race_h2h" icon={Flag} />
+                      <StatRow label="Points" statKey="points_h2h" icon={Trophy} />
+                      <StatRow label="Wins" statKey="wins_h2h" icon={Trophy} />
+                      <StatRow label="Podiums" statKey="podiums_h2h" icon={Trophy} />
+                    </div>
+                  </ChartFrame>
+                </motion.div>
+
+                {/* Summary Cards */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="grid md:grid-cols-2 gap-6"
+                >
+                  <div className="bg-surface-100 border border-white/10 rounded-lg p-6">
+                    <h3 className="font-heading text-lg font-semibold uppercase text-white mb-4 flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-racing-cyan" />
+                      {h2hData.driver1.forename} {h2hData.driver1.surname}
+                    </h3>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <span className="data-label block mb-1">Quali Wins</span>
+                        <span className="text-2xl font-mono font-bold text-white">
+                          {h2hData.quali_h2h[h2hData.driver1.driverRef]}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="data-label block mb-1">Race Wins</span>
+                        <span className="text-2xl font-mono font-bold text-white">
+                          {h2hData.race_h2h[h2hData.driver1.driverRef]}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="data-label block mb-1">Points</span>
+                        <span className="text-2xl font-mono font-bold text-racing-yellow">
+                          {h2hData.points_h2h[h2hData.driver1.driverRef]?.toFixed(0)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="data-label block mb-1">Race Wins</span>
-                    <span className="text-2xl font-mono font-bold text-white">
-                      {h2hData.race_h2h[h2hData.driver1.driverRef]}
-                    </span>
+                  
+                  <div className="bg-surface-100 border border-white/10 rounded-lg p-6">
+                    <h3 className="font-heading text-lg font-semibold uppercase text-white mb-4 flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-racing-red" />
+                      {h2hData.driver2.forename} {h2hData.driver2.surname}
+                    </h3>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <span className="data-label block mb-1">Quali Wins</span>
+                        <span className="text-2xl font-mono font-bold text-white">
+                          {h2hData.quali_h2h[h2hData.driver2.driverRef]}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="data-label block mb-1">Race Wins</span>
+                        <span className="text-2xl font-mono font-bold text-white">
+                          {h2hData.race_h2h[h2hData.driver2.driverRef]}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="data-label block mb-1">Points</span>
+                        <span className="text-2xl font-mono font-bold text-racing-yellow">
+                          {h2hData.points_h2h[h2hData.driver2.driverRef]?.toFixed(0)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="data-label block mb-1">Points</span>
-                    <span className="text-2xl font-mono font-bold text-racing-yellow">
-                      {h2hData.points_h2h[h2hData.driver1.driverRef]?.toFixed(0)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-surface-100 border border-white/10 rounded-lg p-6">
-                <h3 className="font-heading text-lg font-semibold uppercase text-white mb-4 flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-racing-red" />
-                  {h2hData.driver2.forename} {h2hData.driver2.surname}
-                </h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <span className="data-label block mb-1">Quali Wins</span>
-                    <span className="text-2xl font-mono font-bold text-white">
-                      {h2hData.quali_h2h[h2hData.driver2.driverRef]}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="data-label block mb-1">Race Wins</span>
-                    <span className="text-2xl font-mono font-bold text-white">
-                      {h2hData.race_h2h[h2hData.driver2.driverRef]}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="data-label block mb-1">Points</span>
-                    <span className="text-2xl font-mono font-bold text-racing-yellow">
-                      {h2hData.points_h2h[h2hData.driver2.driverRef]?.toFixed(0)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+                </motion.div>
+              </TabsContent>
+
+              <TabsContent value="circuits" className="space-y-6">
+                {/* Circuit Breakdown */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <ChartFrame 
+                    title="Circuit-by-Circuit Breakdown" 
+                    loading={false}
+                    actions={
+                      <span className="text-sm text-slate-500">
+                        {h2hData.circuit_breakdown?.length || 0} circuits
+                      </span>
+                    }
+                  >
+                    {h2hData.circuit_breakdown && h2hData.circuit_breakdown.length > 0 ? (
+                      <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                        {h2hData.circuit_breakdown.map((circuit, i) => {
+                          const d1QualiWin = circuit.d1_quali_wins > circuit.d2_quali_wins;
+                          const d2QualiWin = circuit.d2_quali_wins > circuit.d1_quali_wins;
+                          const d1RaceWin = circuit.d1_race_wins > circuit.d2_race_wins;
+                          const d2RaceWin = circuit.d2_race_wins > circuit.d1_race_wins;
+                          
+                          return (
+                            <Link 
+                              key={i} 
+                              to={`/story?type=circuit&id=${circuit.circuitId}`}
+                              className="block bg-surface-200 rounded-lg p-4 hover:bg-surface-300 transition-colors"
+                            >
+                              <div className="flex items-center justify-between mb-3">
+                                <div>
+                                  <span className="text-white font-semibold">{circuit.name}</span>
+                                  <span className="text-slate-500 text-sm ml-2">{circuit.country}</span>
+                                </div>
+                                <span className="text-slate-500 text-sm">{circuit.races} races</span>
+                              </div>
+                              
+                              <div className="grid grid-cols-3 gap-4 text-center">
+                                {/* Qualifying H2H */}
+                                <div>
+                                  <span className="data-label block mb-1">Qualifying</span>
+                                  <div className="flex items-center justify-center gap-2">
+                                    <span className={`font-mono font-bold ${d1QualiWin ? 'text-racing-cyan' : 'text-white'}`}>
+                                      {circuit.d1_quali_wins}
+                                    </span>
+                                    <span className="text-slate-600">-</span>
+                                    <span className={`font-mono font-bold ${d2QualiWin ? 'text-racing-red' : 'text-white'}`}>
+                                      {circuit.d2_quali_wins}
+                                    </span>
+                                  </div>
+                                </div>
+                                
+                                {/* Race H2H */}
+                                <div>
+                                  <span className="data-label block mb-1">Race</span>
+                                  <div className="flex items-center justify-center gap-2">
+                                    <span className={`font-mono font-bold ${d1RaceWin ? 'text-racing-cyan' : 'text-white'}`}>
+                                      {circuit.d1_race_wins}
+                                    </span>
+                                    <span className="text-slate-600">-</span>
+                                    <span className={`font-mono font-bold ${d2RaceWin ? 'text-racing-red' : 'text-white'}`}>
+                                      {circuit.d2_race_wins}
+                                    </span>
+                                  </div>
+                                </div>
+                                
+                                {/* Race Wins */}
+                                <div>
+                                  <span className="data-label block mb-1">Victories</span>
+                                  <div className="flex items-center justify-center gap-2">
+                                    <span className={`font-mono font-bold ${circuit.d1_wins > 0 ? 'text-racing-yellow' : 'text-slate-600'}`}>
+                                      {circuit.d1_wins}
+                                    </span>
+                                    <span className="text-slate-600">-</span>
+                                    <span className={`font-mono font-bold ${circuit.d2_wins > 0 ? 'text-racing-yellow' : 'text-slate-600'}`}>
+                                      {circuit.d2_wins}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Mini progress bar */}
+                              <div className="mt-3 flex h-1 rounded-full overflow-hidden bg-surface-300">
+                                <div 
+                                  className="bg-racing-cyan transition-all duration-300"
+                                  style={{ width: `${circuit.races > 0 ? (circuit.d1_race_wins / circuit.races) * 100 : 50}%` }}
+                                />
+                                <div 
+                                  className="bg-racing-red transition-all duration-300"
+                                  style={{ width: `${circuit.races > 0 ? (circuit.d2_race_wins / circuit.races) * 100 : 50}%` }}
+                                />
+                              </div>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-slate-500">
+                        No circuit data available
+                      </div>
+                    )}
+                  </ChartFrame>
+                </motion.div>
+              </TabsContent>
+            </Tabs>
 
             {/* Share Button */}
             <motion.div
