@@ -995,6 +995,63 @@ async def get_head_to_head(
         if r2.get("position") and r2["position"] <= 3:
             h2h["podiums_d2"] += 1
     
+    # Circuit-by-circuit breakdown
+    circuit_breakdown = []
+    circuit_stats = {}
+    
+    for race_id in common_race_ids:
+        race = await db.races.find_one({"raceId": race_id}, {"_id": 0, "circuitId": 1})
+        if not race:
+            continue
+        circuit_id = race["circuitId"]
+        
+        if circuit_id not in circuit_stats:
+            circuit = await db.circuits.find_one({"circuitId": circuit_id}, {"_id": 0, "name": 1, "country": 1})
+            circuit_stats[circuit_id] = {
+                "circuitId": circuit_id,
+                "name": circuit["name"] if circuit else "Unknown",
+                "country": circuit["country"] if circuit else "",
+                "races": 0,
+                "d1_quali_wins": 0,
+                "d2_quali_wins": 0,
+                "d1_race_wins": 0,
+                "d2_race_wins": 0,
+                "d1_wins": 0,
+                "d2_wins": 0
+            }
+        
+        r1 = await db.results.find_one({"raceId": race_id, "driverId": driver1_id}, {"_id": 0})
+        r2 = await db.results.find_one({"raceId": race_id, "driverId": driver2_id}, {"_id": 0})
+        
+        if r1 and r2:
+            circuit_stats[circuit_id]["races"] += 1
+            
+            # Qualifying
+            if r1.get("grid") and r2.get("grid") and r1["grid"] > 0 and r2["grid"] > 0:
+                if r1["grid"] < r2["grid"]:
+                    circuit_stats[circuit_id]["d1_quali_wins"] += 1
+                elif r2["grid"] < r1["grid"]:
+                    circuit_stats[circuit_id]["d2_quali_wins"] += 1
+            
+            # Race position
+            if r1.get("position") and r2.get("position"):
+                if r1["position"] < r2["position"]:
+                    circuit_stats[circuit_id]["d1_race_wins"] += 1
+                elif r2["position"] < r1["position"]:
+                    circuit_stats[circuit_id]["d2_race_wins"] += 1
+            elif r1.get("position"):
+                circuit_stats[circuit_id]["d1_race_wins"] += 1
+            elif r2.get("position"):
+                circuit_stats[circuit_id]["d2_race_wins"] += 1
+            
+            # Race wins
+            if r1.get("position") == 1:
+                circuit_stats[circuit_id]["d1_wins"] += 1
+            if r2.get("position") == 1:
+                circuit_stats[circuit_id]["d2_wins"] += 1
+    
+    circuit_breakdown = sorted(circuit_stats.values(), key=lambda x: x["races"], reverse=True)
+    
     return {
         "driver1": driver1,
         "driver2": driver2,
@@ -1003,7 +1060,8 @@ async def get_head_to_head(
         "points_h2h": {driver1["driverRef"]: h2h["points_d1"], driver2["driverRef"]: h2h["points_d2"]},
         "wins_h2h": {driver1["driverRef"]: h2h["wins_d1"], driver2["driverRef"]: h2h["wins_d2"]},
         "podiums_h2h": {driver1["driverRef"]: h2h["podiums_d1"], driver2["driverRef"]: h2h["podiums_d2"]},
-        "common_races": len(common_race_ids)
+        "common_races": len(common_race_ids),
+        "circuit_breakdown": circuit_breakdown
     }
 
 # ----- GOAT ENGINE ROUTES -----
