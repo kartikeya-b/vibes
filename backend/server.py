@@ -1131,6 +1131,13 @@ async def get_head_to_head(
     }
 
 # ----- GOAT ENGINE ROUTES -----
+@api_router.get("/eras")
+async def get_eras():
+    """Get all F1 era definitions"""
+    return {
+        "eras": {k: {**v, "key": k} for k, v in F1_ERAS.items()}
+    }
+
 @api_router.get("/goat/leaderboard")
 async def get_goat_leaderboard(
     weights: str = "wins:25,podiums:15,poles:15,points:15,avg_finish:10,positions_gained:5,championships:15",
@@ -1138,9 +1145,10 @@ async def get_goat_leaderboard(
     year_to: Optional[int] = None,
     min_races: int = 50,
     normalize_per_race: bool = False,
+    era_adjusted: bool = False,
     limit: int = Query(default=50, le=200)
 ):
-    """Get GOAT leaderboard with configurable weights"""
+    """Get GOAT leaderboard with configurable weights and era adjustment"""
     # Parse weights
     weight_dict = {}
     for w in weights.split(","):
@@ -1159,10 +1167,40 @@ async def get_goat_leaderboard(
     # Filter by min races - driver_stats returns list of DriverStats objects
     driver_stats = [d for d in driver_stats if d["races"] >= min_races]
     
+    # Get driver career spans for era calculation
+    driver_years = {}
+    if era_adjusted:
+        for driver in driver_stats:
+            d = driver.model_dump() if hasattr(driver, 'model_dump') else driver
+            # Query the races to find career span
+            career_data = await db.results.aggregate([
+                {"$match": {"driverId": d["driverId"]}},
+                {"$lookup": {"from": "races", "localField": "raceId", "foreignField": "raceId", "as": "race"}},
+                {"$unwind": "$race"},
+                {"$group": {
+                    "_id": "$driverId",
+                    "first_year": {"$min": "$race.year"},
+                    "last_year": {"$max": "$race.year"}
+                }}
+            ]).to_list(1)
+            if career_data:
+                driver_years[d["driverId"]] = {
+                    "first_year": career_data[0]["first_year"],
+                    "last_year": career_data[0]["last_year"]
+                }
+    
     # Calculate scores
     scored_drivers = []
     for driver in driver_stats:
         d = driver.model_dump() if hasattr(driver, 'model_dump') else driver
+        
+        # Calculate era info and normalization
+        era_key = None
+        era_factors = {"races_factor": 1, "points_factor": 1, "era_name": "All Eras", "era_key": "all"}
+        if era_adjusted and d["driverId"] in driver_years:
+            years = driver_years[d["driverId"]]
+            era_key = get_driver_era(years["first_year"], years["last_year"])
+            era_factors = get_era_normalization_factor(era_key)
         
         # Normalize if requested
         divisor = d["races"] if normalize_per_race and d["races"] > 0 else 1
@@ -1170,30 +1208,34 @@ async def get_goat_leaderboard(
         breakdown = {}
         score = 0
         
-        # Wins
+        # Apply era adjustments to raw values
+        era_multiplier = era_factors["races_factor"] if era_adjusted else 1
+        points_multiplier = era_factors["points_factor"] if era_adjusted else 1
+        
+        # Wins (era-adjusted: more wins per season in longer calendars)
         if "wins" in weight_dict:
-            val = d["wins"] / divisor
+            val = (d["wins"] * era_multiplier) / divisor
             contribution = val * weight_dict["wins"]
             breakdown["wins"] = contribution
             score += contribution
         
         # Podiums
         if "podiums" in weight_dict:
-            val = d["podiums"] / divisor
+            val = (d["podiums"] * era_multiplier) / divisor
             contribution = val * weight_dict["podiums"]
             breakdown["podiums"] = contribution
             score += contribution
         
         # Poles
         if "poles" in weight_dict:
-            val = d["poles"] / divisor
+            val = (d["poles"] * era_multiplier) / divisor
             contribution = val * weight_dict["poles"]
             breakdown["poles"] = contribution
             score += contribution
         
-        # Points
+        # Points (era-adjusted for different point systems)
         if "points" in weight_dict:
-            val = d["total_points"] / divisor / 10  # Scale down points
+            val = (d["total_points"] * points_multiplier) / divisor / 10  # Scale down points
             contribution = val * weight_dict["points"]
             breakdown["points"] = contribution
             score += contribution
@@ -1212,10 +1254,12 @@ async def get_goat_leaderboard(
             breakdown["positions_gained"] = contribution
             score += contribution
         
-        # Championships
+        # Championships (era-adjusted: harder to win with more races)
         if "championships" in weight_dict:
             val = d["championships"]
-            contribution = val * weight_dict["championships"] * 5  # Championships weighted heavily
+            # Championships slightly more valuable in shorter seasons (more pressure)
+            champ_era_bonus = 1.1 if era_adjusted and era_key in ["pioneer", "classic"] else 1
+            contribution = val * weight_dict["championships"] * 5 * champ_era_bonus
             breakdown["championships"] = contribution
             score += contribution
         
@@ -1236,7 +1280,15 @@ async def get_goat_leaderboard(
                 "championships": d["championships"],
                 "avg_finish": d.get("avg_finish"),
                 "positions_gained": d.get("positions_gained")
-            }
+            },
+            "era": era_factors["era_name"] if era_adjusted else None,
+            "era_key": era_factors["era_key"] if era_adjusted else None,
+            "era_adjusted_stats": {
+                "wins": round(d["wins"] * era_multiplier, 1),
+                "podiums": round(d["podiums"] * era_multiplier, 1),
+                "poles": round(d["poles"] * era_multiplier, 1),
+                "points": round(d["total_points"] * points_multiplier, 0)
+            } if era_adjusted else None
         })
     
     # Sort by score
