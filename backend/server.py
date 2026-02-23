@@ -1358,6 +1358,317 @@ async def get_circuit_profile(circuit_id: int):
         "total_races": len(race_ids)
     }
 
+@api_router.get("/constructor/{constructor_id}/profile")
+async def get_constructor_profile(constructor_id: int):
+    """Get comprehensive constructor profile for story explorer"""
+    constructor = await db.constructors.find_one({"constructorId": constructor_id}, {"_id": 0})
+    if not constructor:
+        raise HTTPException(status_code=404, detail="Constructor not found")
+    
+    # Get constructor stats
+    stats_pipeline = [
+        {"$match": {"constructorId": constructor_id}},
+        {"$group": {
+            "_id": "$constructorId",
+            "wins": {"$sum": {"$cond": [{"$eq": ["$position", 1]}, 1, 0]}},
+            "podiums": {"$sum": {"$cond": [{"$and": [{"$gte": ["$position", 1]}, {"$lte": ["$position", 3]}]}, 1, 0]}},
+            "poles": {"$sum": {"$cond": [{"$eq": ["$grid", 1]}, 1, 0]}},
+            "total_points": {"$sum": {"$ifNull": ["$points", 0]}},
+            "races": {"$sum": 1}
+        }}
+    ]
+    stats_result = await db.results.aggregate(stats_pipeline).to_list(1)
+    stats = stats_result[0] if stats_result else {"wins": 0, "podiums": 0, "poles": 0, "total_points": 0, "races": 0}
+    
+    # Count championships
+    championships = await get_constructor_championships(constructor_id, None, None)
+    stats["championships"] = championships
+    
+    # Best seasons (most wins)
+    best_seasons_pipeline = [
+        {"$match": {"constructorId": constructor_id, "position": 1}},
+        {"$lookup": {
+            "from": "races",
+            "localField": "raceId",
+            "foreignField": "raceId",
+            "as": "race"
+        }},
+        {"$unwind": "$race"},
+        {"$group": {
+            "_id": "$race.year",
+            "wins": {"$sum": 1}
+        }},
+        {"$sort": {"wins": -1}},
+        {"$limit": 5}
+    ]
+    best_seasons = await db.results.aggregate(best_seasons_pipeline).to_list(5)
+    
+    # Driver roster history
+    driver_history_pipeline = [
+        {"$match": {"constructorId": constructor_id}},
+        {"$lookup": {
+            "from": "races",
+            "localField": "raceId",
+            "foreignField": "raceId",
+            "as": "race"
+        }},
+        {"$unwind": "$race"},
+        {"$lookup": {
+            "from": "drivers",
+            "localField": "driverId",
+            "foreignField": "driverId",
+            "as": "driver"
+        }},
+        {"$unwind": "$driver"},
+        {"$group": {
+            "_id": {
+                "driverId": "$driverId",
+                "year": "$race.year"
+            },
+            "driverRef": {"$first": "$driver.driverRef"},
+            "forename": {"$first": "$driver.forename"},
+            "surname": {"$first": "$driver.surname"},
+            "wins": {"$sum": {"$cond": [{"$eq": ["$position", 1]}, 1, 0]}},
+            "podiums": {"$sum": {"$cond": [{"$lte": ["$position", 3]}, 1, 0]}},
+            "points": {"$sum": "$points"}
+        }},
+        {"$sort": {"_id.year": -1, "points": -1}},
+        {"$group": {
+            "_id": "$_id.year",
+            "drivers": {"$push": {
+                "driverId": "$_id.driverId",
+                "driverRef": "$driverRef",
+                "forename": "$forename",
+                "surname": "$surname",
+                "wins": "$wins",
+                "podiums": "$podiums",
+                "points": "$points"
+            }}
+        }},
+        {"$sort": {"_id": -1}},
+        {"$limit": 20}
+    ]
+    driver_history = await db.results.aggregate(driver_history_pipeline).to_list(20)
+    
+    # Top drivers for this constructor (by wins)
+    top_drivers_pipeline = [
+        {"$match": {"constructorId": constructor_id, "position": 1}},
+        {"$lookup": {
+            "from": "drivers",
+            "localField": "driverId",
+            "foreignField": "driverId",
+            "as": "driver"
+        }},
+        {"$unwind": "$driver"},
+        {"$group": {
+            "_id": "$driverId",
+            "driverRef": {"$first": "$driver.driverRef"},
+            "forename": {"$first": "$driver.forename"},
+            "surname": {"$first": "$driver.surname"},
+            "wins": {"$sum": 1}
+        }},
+        {"$project": {"_id": 0, "driverId": "$_id", "driverRef": 1, "forename": 1, "surname": 1, "wins": 1}},
+        {"$sort": {"wins": -1}},
+        {"$limit": 10}
+    ]
+    top_drivers = await db.results.aggregate(top_drivers_pipeline).to_list(10)
+    
+    # Timeline by year
+    timeline_pipeline = [
+        {"$match": {"constructorId": constructor_id}},
+        {"$lookup": {
+            "from": "races",
+            "localField": "raceId",
+            "foreignField": "raceId",
+            "as": "race"
+        }},
+        {"$unwind": "$race"},
+        {"$group": {
+            "_id": "$race.year",
+            "wins": {"$sum": {"$cond": [{"$eq": ["$position", 1]}, 1, 0]}},
+            "podiums": {"$sum": {"$cond": [{"$lte": ["$position", 3]}, 1, 0]}},
+            "points": {"$sum": {"$ifNull": ["$points", 0]}},
+            "races": {"$sum": 1}
+        }},
+        {"$sort": {"_id": 1}}
+    ]
+    timeline = await db.results.aggregate(timeline_pipeline).to_list(100)
+    
+    return {
+        "constructor": constructor,
+        "stats": stats,
+        "best_seasons": best_seasons,
+        "driver_history": driver_history,
+        "top_drivers": top_drivers,
+        "timeline": timeline
+    }
+
+@api_router.get("/season/{year}/profile")
+async def get_season_profile(year: int):
+    """Get season profile with championship standings and key stats"""
+    # Get all races in the season
+    races = await db.races.find({"year": year}, {"_id": 0}).sort("round", 1).to_list(50)
+    if not races:
+        raise HTTPException(status_code=404, detail="Season not found")
+    
+    race_ids = [r["raceId"] for r in races]
+    last_race_id = max(race_ids)
+    
+    # Get final driver standings
+    driver_standings_pipeline = [
+        {"$match": {"raceId": last_race_id}},
+        {"$lookup": {
+            "from": "drivers",
+            "localField": "driverId",
+            "foreignField": "driverId",
+            "as": "driver"
+        }},
+        {"$unwind": "$driver"},
+        {"$lookup": {
+            "from": "constructors",
+            "let": {"driverId": "$driverId"},
+            "pipeline": [
+                {"$match": {"$expr": {"$eq": ["$raceId", last_race_id]}}},
+                {"$lookup": {
+                    "from": "results",
+                    "pipeline": [
+                        {"$match": {"raceId": last_race_id}},
+                        {"$project": {"_id": 0, "driverId": 1, "constructorId": 1}}
+                    ],
+                    "as": "results"
+                }}
+            ],
+            "as": "teamInfo"
+        }},
+        {"$project": {
+            "_id": 0,
+            "position": 1,
+            "points": 1,
+            "wins": 1,
+            "driverId": 1,
+            "driverRef": "$driver.driverRef",
+            "forename": "$driver.forename",
+            "surname": "$driver.surname",
+            "nationality": "$driver.nationality"
+        }},
+        {"$sort": {"position": 1}},
+        {"$limit": 20}
+    ]
+    driver_standings = await db.driver_standings.aggregate(driver_standings_pipeline).to_list(20)
+    
+    # Get final constructor standings
+    constructor_standings_pipeline = [
+        {"$match": {"raceId": last_race_id}},
+        {"$lookup": {
+            "from": "constructors",
+            "localField": "constructorId",
+            "foreignField": "constructorId",
+            "as": "constructor"
+        }},
+        {"$unwind": "$constructor"},
+        {"$project": {
+            "_id": 0,
+            "position": 1,
+            "points": 1,
+            "wins": 1,
+            "constructorId": 1,
+            "name": "$constructor.name",
+            "nationality": "$constructor.nationality"
+        }},
+        {"$sort": {"position": 1}},
+        {"$limit": 15}
+    ]
+    constructor_standings = await db.constructor_standings.aggregate(constructor_standings_pipeline).to_list(15)
+    
+    # Season statistics
+    season_stats_pipeline = [
+        {"$match": {"raceId": {"$in": race_ids}}},
+        {"$group": {
+            "_id": None,
+            "total_entries": {"$sum": 1},
+            "total_points": {"$sum": {"$ifNull": ["$points", 0]}},
+            "dnfs": {"$sum": {"$cond": [{"$ne": ["$statusId", 1]}, 1, 0]}},
+            "unique_winners": {"$addToSet": {"$cond": [{"$eq": ["$position", 1]}, "$driverId", None]}},
+            "unique_pole_sitters": {"$addToSet": {"$cond": [{"$eq": ["$grid", 1]}, "$driverId", None]}}
+        }}
+    ]
+    season_stats_result = await db.results.aggregate(season_stats_pipeline).to_list(1)
+    season_stats = season_stats_result[0] if season_stats_result else {}
+    
+    # Count unique winners (filter out None)
+    unique_winners = [w for w in season_stats.get("unique_winners", []) if w is not None]
+    unique_pole_sitters = [p for p in season_stats.get("unique_pole_sitters", []) if p is not None]
+    
+    # Race winners for the season
+    race_winners_pipeline = [
+        {"$match": {"raceId": {"$in": race_ids}, "position": 1}},
+        {"$lookup": {
+            "from": "races",
+            "localField": "raceId",
+            "foreignField": "raceId",
+            "as": "race"
+        }},
+        {"$unwind": "$race"},
+        {"$lookup": {
+            "from": "drivers",
+            "localField": "driverId",
+            "foreignField": "driverId",
+            "as": "driver"
+        }},
+        {"$unwind": "$driver"},
+        {"$lookup": {
+            "from": "constructors",
+            "localField": "constructorId",
+            "foreignField": "constructorId",
+            "as": "constructor"
+        }},
+        {"$unwind": "$constructor"},
+        {"$project": {
+            "_id": 0,
+            "raceId": 1,
+            "round": "$race.round",
+            "raceName": "$race.name",
+            "driverId": 1,
+            "driverRef": "$driver.driverRef",
+            "forename": "$driver.forename",
+            "surname": "$driver.surname",
+            "constructorName": "$constructor.name"
+        }},
+        {"$sort": {"round": 1}}
+    ]
+    race_winners = await db.results.aggregate(race_winners_pipeline).to_list(50)
+    
+    # Championship battle - points progression
+    championship_progression = []
+    for race in races[:]:
+        standings_at_race = await db.driver_standings.find(
+            {"raceId": race["raceId"]},
+            {"_id": 0, "driverId": 1, "points": 1, "position": 1}
+        ).sort("position", 1).limit(5).to_list(5)
+        
+        if standings_at_race:
+            championship_progression.append({
+                "round": race["round"],
+                "raceName": race["name"],
+                "standings": standings_at_race
+            })
+    
+    return {
+        "year": year,
+        "total_races": len(races),
+        "races": races,
+        "driver_standings": driver_standings,
+        "constructor_standings": constructor_standings,
+        "stats": {
+            "total_entries": season_stats.get("total_entries", 0),
+            "unique_winners": len(unique_winners),
+            "unique_pole_sitters": len(unique_pole_sitters),
+            "dnf_count": season_stats.get("dnfs", 0)
+        },
+        "race_winners": race_winners,
+        "championship_progression": championship_progression[:10]  # Limit to first 10 races for performance
+    }
+
 @api_router.get("/facts/generate")
 async def generate_facts(
     entity_type: str = Query(..., enum=["driver", "constructor", "circuit"]),
