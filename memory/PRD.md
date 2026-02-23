@@ -28,16 +28,16 @@ F1 Intelligence is a premium-feeling, dark-themed web app that lets users explor
 - ✅ RESTful API with FastAPI
 - ✅ Endpoints: /api/stats/overview, /api/stats/drivers, /api/stats/constructors
 - ✅ Race Deep Dive: /api/race/{id}, /api/race/{id}/results, /api/race/{id}/lap-times, /api/race/{id}/pit-stops, /api/race/{id}/movers
-- ✅ Rivalry: /api/rivalry/{d1}/{d2}
+- ✅ Rivalry: /api/rivalry/{d1}/{d2} with circuit_breakdown
 - ✅ GOAT: /api/goat/leaderboard with configurable weights
-- ✅ Story Explorer: /api/driver/{id}/profile, /api/circuit/{id}/profile, /api/facts/generate
+- ✅ Story Explorer: /api/driver/{id}/profile, /api/circuit/{id}/profile, /api/constructor/{id}/profile, /api/season/{year}/profile, /api/facts/generate
 
 ### Frontend
 - ✅ Premium dark theme with Barlow Condensed + JetBrains Mono fonts
 - ✅ Analytics Studio with KPI tiles and bar charts
 - ✅ Race Deep Dive with position-by-lap chart and pit stop timeline
-- ✅ Story Explorer with driver/circuit profiles and fact generator
-- ✅ Rivalry Explorer with head-to-head statistics and comparison bars
+- ✅ Story Explorer with driver/constructor/circuit/season profiles and fact generator
+- ✅ Rivalry Explorer with head-to-head statistics, comparison bars, and circuit-by-circuit breakdown
 - ✅ GOAT Engine with weight sliders and live leaderboard
 - ✅ Global navigation between all 5 modules
 - ✅ Filter bar with season/driver/constructor selection
