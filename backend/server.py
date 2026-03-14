@@ -278,11 +278,11 @@ async def import_csv_to_mongo():
 
 async def create_indexes():
     """Create indexes for better query performance"""
-    await db.drivers.create_index("driverId", unique=True)
+    await db.drivers.create_index("driverId", unique=True, sparse=True)
     await db.drivers.create_index("driverRef")
-    await db.constructors.create_index("constructorId", unique=True)
+    await db.constructors.create_index("constructorId", unique=True, sparse=True)
     await db.constructors.create_index("constructorRef")
-    await db.circuits.create_index("circuitId", unique=True)
+    await db.circuits.create_index("circuitId", unique=True, sparse=True)
     await db.races.create_index("raceId", unique=True, sparse=True)
     await db.races.create_index([("year", -1), ("round", 1)])
     await db.results.create_index("raceId")
