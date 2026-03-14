@@ -277,26 +277,16 @@ async def import_csv_to_mongo():
     logger.info("Data import complete!")
 
 async def create_indexes():
-    """Create indexes for better query performance"""
-    await db.drivers.create_index("driverId", unique=True, sparse=True)
-    await db.drivers.create_index("driverRef")
-    await db.constructors.create_index("constructorId", unique=True, sparse=True)
-    await db.constructors.create_index("constructorRef")
-    await db.circuits.create_index("circuitId", unique=True, sparse=True)
-    await db.races.create_index("raceId", unique=True, sparse=True)
-    await db.races.create_index([("year", -1), ("round", 1)])
-    await db.results.create_index("raceId")
-    await db.results.create_index("driverId")
-    await db.results.create_index("constructorId")
-    await db.results.create_index([("raceId", 1), ("position", 1)])
-    await db.qualifying.create_index("raceId")
-    await db.qualifying.create_index("driverId")
-    await db.lap_times.create_index([("raceId", 1), ("lap", 1)])
-    await db.lap_times.create_index([("raceId", 1), ("driverId", 1)])
-    await db.pit_stops.create_index([("raceId", 1), ("driverId", 1)])
-    await db.driver_standings.create_index([("raceId", 1), ("driverId", 1)])
-    await db.constructor_standings.create_index([("raceId", 1), ("constructorId", 1)])
-    logger.info("Indexes created!")
+    try:
+        await db.drivers.create_index("driverId", unique=True, sparse=True)
+        await db.constructors.create_index("constructorId", unique=True, sparse=True)
+        await db.circuits.create_index("circuitId", unique=True, sparse=True)
+        await db.races.create_index("raceId", unique=True, sparse=True)
+        await db.results.create_index("resultId", unique=True, sparse=True)
+        await db.seasons.create_index("year", unique=True, sparse=True)
+        await db.status.create_index("statusId", unique=True, sparse=True)
+    except Exception as e:
+        logger.warning(f"Index creation skipped: {e}")
 
 # ============ API ROUTES ============
 
