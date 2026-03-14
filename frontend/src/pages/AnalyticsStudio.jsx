@@ -67,7 +67,7 @@ const AnalyticsStudio = () => {
         ]);
 
         setStats(overviewData);
-        setDriverStats(driversData);
+        setDriverStats(Array.isArray(driversData) ? driversData : driversData.data || driversData.drivers || []);
         setConstructorStats(constructorsData);
       } catch (err) {
         console.error('Failed to fetch analytics:', err);
