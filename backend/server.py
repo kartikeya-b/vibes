@@ -283,7 +283,7 @@ async def create_indexes():
     await db.constructors.create_index("constructorId", unique=True)
     await db.constructors.create_index("constructorRef")
     await db.circuits.create_index("circuitId", unique=True)
-    await db.races.create_index("raceId", unique=True)
+    await db.races.create_index("raceId", unique=True, sparse=True)
     await db.races.create_index([("year", -1), ("round", 1)])
     await db.results.create_index("raceId")
     await db.results.create_index("driverId")
