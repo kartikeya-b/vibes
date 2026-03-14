@@ -215,7 +215,7 @@ class GOATScore(BaseModel):
     stats: Dict[str, Any]
 
 # ============ DATA IMPORT ============
-DATA_DIR = ROOT_DIR.parent / "data"
+DATA_DIR = ROOT_DIR / "data"
 
 async def import_csv_to_mongo():
     """Import all CSV files into MongoDB collections"""
