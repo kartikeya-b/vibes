@@ -186,15 +186,15 @@ export const FilterBar = ({ showDriverFilter = true, showConstructorFilter = tru
   }, [pendingFilters, filters]);
   
   useEffect(() => {
-    getSeasons().then(setSeasons).catch(console.error);
+    getSeasons().then(data => setSeasons(Array.isArray(data) ? data : data.seasons || data.data || [])).catch(console.error);
   }, []);
   
   useEffect(() => {
-    getDrivers({ limit: 1000 }).then(setDrivers).catch(console.error);
+    getDrivers({ limit: 1000 }).then(data => setDrivers(Array.isArray(data) ? data : data.drivers || data.data || [])).catch(console.error);
   }, []);
   
   useEffect(() => {
-    getConstructors({ limit: 500 }).then(setConstructors).catch(console.error);
+   getConstructors({ limit: 500 }).then(data => setConstructors(Array.isArray(data) ? data : data.constructors || data.data || [])).catch(console.error);
   }, []);
   
   // Sync pending filters when URL changes
