@@ -5,7 +5,7 @@ const API = `${BACKEND_URL}/api`;
 
 const api = axios.create({
   baseURL: API,
-  timeout: 30000,
+  timeout: 120000,
 });
 
 // Metadata endpoints
