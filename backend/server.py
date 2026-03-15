@@ -601,22 +601,42 @@ async def get_driver_stats(
     driver_stats = await db.results.aggregate(pipeline).to_list(limit)
     
     # Add championship counts
+# Bulk championship count - single query for all drivers
+    champ_pipeline = []
+    if year_from or year_to:
+        yr = {}
+        if year_from: yr["$gte"] = year_from
+        if year_to: yr["$lte"] = year_to
+        champ_pipeline.append({"$match": {"year": yr}})
+    champ_pipeline.append({"$group": {"_id": "$year", "lastRaceId": {"$max": "$raceId"}}})
+    last_races = await db.races.aggregate(champ_pipeline).to_list(100)
+    last_race_ids = [r["lastRaceId"] for r in last_races]
+    champ_records = await db.driver_standings.find(
+        {"raceId": {"$in": last_race_ids}, "position": 1}, {"_id": 0, "driverId": 1}
+    ).to_list(10000)
+    champ_counts = {}
+    for rec in champ_records:
+        did = rec["driverId"]
+        champ_counts[did] = champ_counts.get(did, 0) + 1
     for stat in driver_stats:
-        # Count seasons where driver finished P1 in standings at last race of season
-        champs = await get_driver_championships(stat["driverId"], year_from, year_to)
-        stat["championships"] = champs
+        stat["championships"] = champ_counts.get(stat["driverId"], 0)
     
     return driver_stats
 
 async def get_driver_championships(driver_id: int, year_from: Optional[int] = None, year_to: Optional[int] = None) -> int:
-    """Count championships won by a driver"""
-    # Get last race of each season
-    pipeline = [
-        {"$group": {
-            "_id": "$year",
-            "lastRaceId": {"$max": "$raceId"}
-        }}
-    ]
+    match = {}
+    if year_from or year_to:
+        match["year"] = {}
+        if year_from: match["year"]["$gte"] = year_from
+        if year_to: match["year"]["$lte"] = year_to
+    pipeline = []
+    if match: pipeline.append({"$match": match})
+    pipeline.append({"$group": {"_id": "$year", "lastRaceId": {"$max": "$raceId"}}})
+    last_races = await db.races.aggregate(pipeline).to_list(100)
+    last_race_ids = [r["lastRaceId"] for r in last_races]
+    return await db.driver_standings.count_documents({
+        "raceId": {"$in": last_race_ids}, "driverId": driver_id, "position": 1
+    })
     
     if year_from or year_to:
         match = {"year": {}}
@@ -960,164 +980,101 @@ async def get_head_to_head(
     same_team_only: bool = False
 ):
     """Get head-to-head comparison between two drivers"""
-    # Get driver info
     driver1 = await db.drivers.find_one({"driverId": driver1_id}, {"_id": 0})
     driver2 = await db.drivers.find_one({"driverId": driver2_id}, {"_id": 0})
-    
     if not driver1 or not driver2:
         raise HTTPException(status_code=404, detail="Driver not found")
-    
-    # Build race filter
+
     race_match = {}
     if year_from or year_to:
         race_match["year"] = {}
-        if year_from:
-            race_match["year"]["$gte"] = year_from
-        if year_to:
-            race_match["year"]["$lte"] = year_to
-    
-    race_ids = None
-    if race_match:
-        race_ids = await db.races.distinct("raceId", race_match)
-    
-    # Find common races
-    d1_match = {"driverId": driver1_id}
-    d2_match = {"driverId": driver2_id}
-    
+        if year_from: race_match["year"]["$gte"] = year_from
+        if year_to: race_match["year"]["$lte"] = year_to
+    race_ids = await db.races.distinct("raceId", race_match) if race_match else None
+
+    results_match = {"driverId": {"$in": [driver1_id, driver2_id]}}
     if race_ids:
-        d1_match["raceId"] = {"$in": race_ids}
-        d2_match["raceId"] = {"$in": race_ids}
-    
-    d1_races = await db.results.distinct("raceId", d1_match)
-    d2_races = await db.results.distinct("raceId", d2_match)
-    common_race_ids = list(set(d1_races) & set(d2_races))
-    
+        results_match["raceId"] = {"$in": race_ids}
+
+    all_results = await db.results.find(results_match, {"_id": 0}).to_list(100000)
+
+    results_by_race = {}
+    for r in all_results:
+        rid, did = r["raceId"], r["driverId"]
+        if rid not in results_by_race:
+            results_by_race[rid] = {}
+        results_by_race[rid][did] = r
+
+    common_race_ids = [rid for rid, drivers in results_by_race.items()
+                       if driver1_id in drivers and driver2_id in drivers]
+
     if same_team_only:
-        # Filter to races where both were at same constructor
-        same_team_races = []
-        for race_id in common_race_ids:
-            r1 = await db.results.find_one({"raceId": race_id, "driverId": driver1_id}, {"constructorId": 1})
-            r2 = await db.results.find_one({"raceId": race_id, "driverId": driver2_id}, {"constructorId": 1})
-            if r1 and r2 and r1["constructorId"] == r2["constructorId"]:
-                same_team_races.append(race_id)
-        common_race_ids = same_team_races
-    
-    # Initialize counters
-    h2h = {
-        "quali_d1": 0, "quali_d2": 0,
-        "race_d1": 0, "race_d2": 0,
-        "points_d1": 0, "points_d2": 0,
-        "wins_d1": 0, "wins_d2": 0,
-        "podiums_d1": 0, "podiums_d2": 0
-    }
-    
-    # Compare in each race
+        common_race_ids = [rid for rid in common_race_ids
+                           if results_by_race[rid][driver1_id].get("constructorId") ==
+                              results_by_race[rid][driver2_id].get("constructorId")]
+
+    h2h = {"quali_d1": 0, "quali_d2": 0, "race_d1": 0, "race_d2": 0,
+            "points_d1": 0.0, "points_d2": 0.0, "wins_d1": 0, "wins_d2": 0,
+            "podiums_d1": 0, "podiums_d2": 0}
+
+    circuit_stats = {}
+    all_race_ids = list(results_by_race.keys())
+    races_data = await db.races.find({"raceId": {"$in": all_race_ids}}, {"_id": 0, "raceId": 1, "circuitId": 1}).to_list(10000)
+    race_to_circuit = {r["raceId"]: r["circuitId"] for r in races_data}
+
+    circuit_ids = list(set(race_to_circuit.values()))
+    circuits_data = await db.circuits.find({"circuitId": {"$in": circuit_ids}}, {"_id": 0, "circuitId": 1, "name": 1, "country": 1}).to_list(1000)
+    circuit_lookup = {c["circuitId"]: c for c in circuits_data}
+
     for race_id in common_race_ids:
-        r1 = await db.results.find_one({"raceId": race_id, "driverId": driver1_id}, {"_id": 0})
-        r2 = await db.results.find_one({"raceId": race_id, "driverId": driver2_id}, {"_id": 0})
-        
-        if not r1 or not r2:
-            continue
-        
-        # Grid comparison (qualifying H2H)
+        r1 = results_by_race[race_id][driver1_id]
+        r2 = results_by_race[race_id][driver2_id]
+
         if r1.get("grid") and r2.get("grid") and r1["grid"] > 0 and r2["grid"] > 0:
-            if r1["grid"] < r2["grid"]:
-                h2h["quali_d1"] += 1
-            elif r2["grid"] < r1["grid"]:
-                h2h["quali_d2"] += 1
-        
-        # Race position comparison
+            if r1["grid"] < r2["grid"]: h2h["quali_d1"] += 1
+            elif r2["grid"] < r1["grid"]: h2h["quali_d2"] += 1
+
         if r1.get("position") and r2.get("position"):
-            if r1["position"] < r2["position"]:
-                h2h["race_d1"] += 1
-            elif r2["position"] < r1["position"]:
-                h2h["race_d2"] += 1
-        elif r1.get("position"):
-            h2h["race_d1"] += 1
-        elif r2.get("position"):
-            h2h["race_d2"] += 1
-        
-        # Points
+            if r1["position"] < r2["position"]: h2h["race_d1"] += 1
+            elif r2["position"] < r1["position"]: h2h["race_d2"] += 1
+        elif r1.get("position"): h2h["race_d1"] += 1
+        elif r2.get("position"): h2h["race_d2"] += 1
+
         h2h["points_d1"] += r1.get("points", 0) or 0
         h2h["points_d2"] += r2.get("points", 0) or 0
-        
-        # Wins and podiums
-        if r1.get("position") == 1:
-            h2h["wins_d1"] += 1
-        if r2.get("position") == 1:
-            h2h["wins_d2"] += 1
-        if r1.get("position") and r1["position"] <= 3:
-            h2h["podiums_d1"] += 1
-        if r2.get("position") and r2["position"] <= 3:
-            h2h["podiums_d2"] += 1
-    
-    # Circuit-by-circuit breakdown
-    circuit_breakdown = []
-    circuit_stats = {}
-    
-    for race_id in common_race_ids:
-        race = await db.races.find_one({"raceId": race_id}, {"_id": 0, "circuitId": 1})
-        if not race:
-            continue
-        circuit_id = race["circuitId"]
-        
-        if circuit_id not in circuit_stats:
-            circuit = await db.circuits.find_one({"circuitId": circuit_id}, {"_id": 0, "name": 1, "country": 1})
-            circuit_stats[circuit_id] = {
-                "circuitId": circuit_id,
-                "name": circuit["name"] if circuit else "Unknown",
-                "country": circuit["country"] if circuit else "",
-                "races": 0,
-                "d1_quali_wins": 0,
-                "d2_quali_wins": 0,
-                "d1_race_wins": 0,
-                "d2_race_wins": 0,
-                "d1_wins": 0,
-                "d2_wins": 0
-            }
-        
-        r1 = await db.results.find_one({"raceId": race_id, "driverId": driver1_id}, {"_id": 0})
-        r2 = await db.results.find_one({"raceId": race_id, "driverId": driver2_id}, {"_id": 0})
-        
-        if r1 and r2:
-            circuit_stats[circuit_id]["races"] += 1
-            
-            # Qualifying
+        if r1.get("position") == 1: h2h["wins_d1"] += 1
+        if r2.get("position") == 1: h2h["wins_d2"] += 1
+        if r1.get("position") and r1["position"] <= 3: h2h["podiums_d1"] += 1
+        if r2.get("position") and r2["position"] <= 3: h2h["podiums_d2"] += 1
+
+        circuit_id = race_to_circuit.get(race_id)
+        if circuit_id:
+            if circuit_id not in circuit_stats:
+                c = circuit_lookup.get(circuit_id, {})
+                circuit_stats[circuit_id] = {"circuitId": circuit_id, "name": c.get("name", "Unknown"),
+                    "country": c.get("country", ""), "races": 0, "d1_quali_wins": 0,
+                    "d2_quali_wins": 0, "d1_race_wins": 0, "d2_race_wins": 0, "d1_wins": 0, "d2_wins": 0}
+            cs = circuit_stats[circuit_id]
+            cs["races"] += 1
             if r1.get("grid") and r2.get("grid") and r1["grid"] > 0 and r2["grid"] > 0:
-                if r1["grid"] < r2["grid"]:
-                    circuit_stats[circuit_id]["d1_quali_wins"] += 1
-                elif r2["grid"] < r1["grid"]:
-                    circuit_stats[circuit_id]["d2_quali_wins"] += 1
-            
-            # Race position
+                if r1["grid"] < r2["grid"]: cs["d1_quali_wins"] += 1
+                elif r2["grid"] < r1["grid"]: cs["d2_quali_wins"] += 1
             if r1.get("position") and r2.get("position"):
-                if r1["position"] < r2["position"]:
-                    circuit_stats[circuit_id]["d1_race_wins"] += 1
-                elif r2["position"] < r1["position"]:
-                    circuit_stats[circuit_id]["d2_race_wins"] += 1
-            elif r1.get("position"):
-                circuit_stats[circuit_id]["d1_race_wins"] += 1
-            elif r2.get("position"):
-                circuit_stats[circuit_id]["d2_race_wins"] += 1
-            
-            # Race wins
-            if r1.get("position") == 1:
-                circuit_stats[circuit_id]["d1_wins"] += 1
-            if r2.get("position") == 1:
-                circuit_stats[circuit_id]["d2_wins"] += 1
-    
+                if r1["position"] < r2["position"]: cs["d1_race_wins"] += 1
+                elif r2["position"] < r1["position"]: cs["d2_race_wins"] += 1
+            if r1.get("position") == 1: cs["d1_wins"] += 1
+            if r2.get("position") == 1: cs["d2_wins"] += 1
+
     circuit_breakdown = sorted(circuit_stats.values(), key=lambda x: x["races"], reverse=True)
-    
+
     return {
-        "driver1": driver1,
-        "driver2": driver2,
+        "driver1": driver1, "driver2": driver2,
         "quali_h2h": {driver1["driverRef"]: h2h["quali_d1"], driver2["driverRef"]: h2h["quali_d2"]},
         "race_h2h": {driver1["driverRef"]: h2h["race_d1"], driver2["driverRef"]: h2h["race_d2"]},
         "points_h2h": {driver1["driverRef"]: h2h["points_d1"], driver2["driverRef"]: h2h["points_d2"]},
         "wins_h2h": {driver1["driverRef"]: h2h["wins_d1"], driver2["driverRef"]: h2h["wins_d2"]},
         "podiums_h2h": {driver1["driverRef"]: h2h["podiums_d1"], driver2["driverRef"]: h2h["podiums_d2"]},
-        "common_races": len(common_race_ids),
-        "circuit_breakdown": circuit_breakdown
+        "common_races": len(common_race_ids), "circuit_breakdown": circuit_breakdown
     }
 
 # ----- GOAT ENGINE ROUTES -----
