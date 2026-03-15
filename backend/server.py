@@ -19,7 +19,7 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-app = FastAPI(title="F1 Intelligence API")
+app = FastAPI(title="F1 Intelligence API", redirect_slashes=False)
 api_router = APIRouter(prefix="/api")
 
 # Configure logging
