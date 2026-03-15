@@ -20,7 +20,7 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 app = FastAPI(title="F1 Intelligence API", redirect_slashes=False)
-api_router = APIRouter(prefix="/api")
+api_router = APIRouter(prefix="/api", redirect_slashes=False)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
