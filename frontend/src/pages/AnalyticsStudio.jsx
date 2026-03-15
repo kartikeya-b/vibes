@@ -60,12 +60,15 @@ const AnalyticsStudio = () => {
         if (filters.driverId) params.driver_id = filters.driverId;
         if (filters.constructorId) params.constructor_id = filters.constructorId;
 
-        const [overviewData, driversData, constructorsData] = await Promise.all([
-          getOverviewStats(params),
-          getDriverStats({ ...params, limit: 20 }),
-          getConstructorStats({ ...params, limit: 15 })
-        ]);
+const [overviewData, driversData, constructorsData] = await Promise.all([
+  getOverviewStats(params).catch(() => null),
+  getDriverStats({ ...params, limit: 20 }).catch(() => []),
+  getConstructorStats({ ...params, limit: 15 }).catch(() => [])
+]);
 
+if (overviewData) setStats(overviewData);
+setDriverStats(Array.isArray(driversData) ? driversData : driversData?.data || []);
+setConstructorStats(Array.isArray(constructorsData) ? constructorsData : constructorsData?.data || []);
         setStats(overviewData);
         setDriverStats(Array.isArray(driversData) ? driversData : driversData.data || driversData.drivers || []);
         setConstructorStats(constructorsData);
